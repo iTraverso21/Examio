@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import { checkRateLimit } from "../../lib/rate-limiter";
 
 export const dynamic = "force-dynamic";
 
@@ -8,14 +7,9 @@ const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
 
 export async function POST(request: Request) {
   try {
-    const limitStatus = checkRateLimit();
-    if (!limitStatus.allowed) {
-      return NextResponse.json({ error: limitStatus.error }, { status: 429 });
-    }
-
     const formData = await request.formData();
     // Usamos Flash-Lite (o el que tengas disponible)
-    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash-lite" });
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
     const nombreRamo = formData.get('nombreRamo') as string || "Ramo";
     const archivos: File[] = [];
