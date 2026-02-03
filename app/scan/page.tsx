@@ -2,17 +2,12 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-
-interface Ramo {
-  id: number;
-  nombre: string;
-  archivos: File[];
-}
+import { useScan } from "../context/ScanContext";
 
 export default function ScanPage() {
   const router = useRouter();
-  
-  const [ramos, setRamos] = useState<Ramo[]>([{ id: 1, nombre: "", archivos: [] }]);
+  const { ramos, setRamos } = useScan();
+
   const [analizando, setAnalizando] = useState(false);
   const [progreso, setProgreso] = useState({ actual: 0, total: 0, archivo: "" });
   const [errorToast, setErrorToast] = useState<string | null>(null);
@@ -86,11 +81,12 @@ export default function ScanPage() {
     setProgreso({ actual: 0, total: ramosValidos.length, archivo: "" });
 
     try {
-      const resultados = [];
-      
+      const resultados: { titulo: string; fecha: string; descripcion: string }[] = [];
+      const ramosFallidos: string[] = [];
+
       for (let i = 0; i < ramosValidos.length; i++) {
         const ramo = ramosValidos[i];
-        
+
         setProgreso({
           actual: i + 1,
           total: ramosValidos.length,
@@ -99,7 +95,7 @@ export default function ScanPage() {
 
         const formData = new FormData();
         formData.append('nombreRamo', ramo.nombre);
-        
+
         ramo.archivos.forEach((archivo, index) => {
           formData.append(`file_${index}`, archivo);
         });
@@ -108,19 +104,48 @@ export default function ScanPage() {
         const data = await response.json();
 
         if (response.status === 429) {
-          router.push(`/error?message=${encodeURIComponent(data.error)}`);
+          sessionStorage.setItem("error_ok", "1");
+          router.push(`/error?message=${encodeURIComponent(data.error || "Límite alcanzado")}`);
           return;
         }
 
-        if (data.eventos) resultados.push(...data.eventos);
+        if (response.status === 500 || data.error) {
+          ramosFallidos.push(ramo.nombre);
+          continue;
+        }
+
+        if (data.eventos && Array.isArray(data.eventos) && data.eventos.length > 0) {
+          resultados.push(...data.eventos);
+        } else {
+          ramosFallidos.push(ramo.nombre);
+        }
       }
 
-      sessionStorage.setItem('eventos', JSON.stringify(resultados));
+      if (resultados.length === 0) {
+        sessionStorage.setItem("error_ok", "1");
+        router.push(
+          "/error?message=" + encodeURIComponent(
+            ramosFallidos.length > 0
+              ? "No se pudo analizar ningún ramo. Revisa que los archivos no estén vacíos o dañados."
+              : "No se encontraron eventos. Revisa que los archivos tengan un calendario de evaluaciones."
+          )
+        );
+        return;
+      }
+
+      localStorage.setItem("eventos", JSON.stringify(resultados));
+      sessionStorage.setItem("result_ok", "1");
+      if (ramosFallidos.length > 0) {
+        sessionStorage.setItem("ramos_no_analizados", JSON.stringify(ramosFallidos));
+      } else {
+        sessionStorage.removeItem("ramos_no_analizados");
+      }
       router.push('/result');
 
     } catch (error) {
       console.error(error);
-      router.push('/error?message=Error de conexión');
+      sessionStorage.setItem("error_ok", "1");
+      router.push('/error?message=' + encodeURIComponent('Error de conexión'));
     }
   };
 
@@ -179,11 +204,11 @@ export default function ScanPage() {
               </div>
 
               <div className="bg-[#F8FAFC] border border-dashed border-[#CBD5E1] rounded-lg p-6 transition-colors group-hover:bg-[#F1F5F9] group-hover:border-[#94A3B8]" onPaste={(e) => handlePaste(ramo.id, e)}>
-                <input type="file" accept=".pdf,image/*" multiple onChange={(e) => agregarArchivos(ramo.id, e.target.files)} className="hidden" id={`file-${ramo.id}`} />
+                <input type="file" accept=".pdf,.doc,.docx,image/*" multiple onChange={(e) => agregarArchivos(ramo.id, e.target.files)} className="hidden" id={`file-${ramo.id}`} />
                 <label htmlFor={`file-${ramo.id}`} className="block text-center cursor-pointer">
                   <div className="text-2xl mb-2 opacity-50">📎</div>
                   <p className="text-sm font-semibold text-[#0F172A] mb-1">Click para subir o Ctrl+V</p>
-                  <p className="text-xs text-[#64748B]">PDF o imágenes (Máx 3)</p>
+                  <p className="text-xs text-[#64748B]">PDF, Word o imágenes (Máx 3)</p>
                 </label>
                 {ramo.archivos.length > 0 && (
                   <div className="mt-4 space-y-2 border-t border-[#E2E8F0] pt-3">

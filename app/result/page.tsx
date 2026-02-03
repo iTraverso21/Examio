@@ -13,26 +13,73 @@ export default function ResultPage() {
   const router = useRouter();
   const [eventos, setEventos] = useState<Evento[]>([]);
   const [descargado, setDescargado] = useState(false);
+  const [editandoEventoIdx, setEditandoEventoIdx] = useState<number | null>(null);
+  const [nuevoEvento, setNuevoEvento] = useState({ titulo: "", fecha: "", descripcion: "" });
+  const [mostrarAgregarRamo, setMostrarAgregarRamo] = useState<string | null>(null);
+  const [ramosNoAnalizados, setRamosNoAnalizados] = useState<string[]>([]);
+
+  const persistEventos = (next: Evento[]) => {
+    setEventos(next);
+    localStorage.setItem("eventos", JSON.stringify(next));
+  };
+
+  const actualizarEvento = (index: number, datos: Partial<Evento>) => {
+    const next = eventos.map((e, i) => (i === index ? { ...e, ...datos } : e));
+    next.sort((a, b) => (new Date(a.fecha).getTime()) - (new Date(b.fecha).getTime()));
+    persistEventos(next);
+    setEditandoEventoIdx(null);
+  };
+
+  const agregarEvento = (ramo: string) => {
+    const { titulo, fecha } = nuevoEvento;
+    if (!titulo.trim() || !fecha) return;
+    const tituloConRamo = titulo.trim().startsWith("[") ? titulo.trim() : `[${ramo}] ${titulo.trim()}`;
+    const ev: Evento = {
+      titulo: tituloConRamo,
+      fecha,
+      descripcion: nuevoEvento.descripcion.trim() || "",
+    };
+    const next = [...eventos, ev].sort((a, b) => (new Date(a.fecha).getTime()) - (new Date(b.fecha).getTime()));
+    persistEventos(next);
+    setNuevoEvento({ titulo: "", fecha: "", descripcion: "" });
+    setMostrarAgregarRamo(null);
+  };
 
   const LINK_DONACION = "https://link.mercadopago.cl/examio"; 
 
   useEffect(() => {
-    const data = sessionStorage.getItem('eventos');
-    if (!data) {
-      router.push('/scan');
+    const permitido = typeof window !== "undefined" && sessionStorage.getItem("result_ok");
+    const data = typeof window !== "undefined" ? localStorage.getItem("eventos") : null;
+    if (!permitido || !data) {
+      router.replace("/scan");
       return;
     }
-    
     try {
       const eventosData = JSON.parse(data);
+      if (!Array.isArray(eventosData) || eventosData.length === 0) {
+        sessionStorage.setItem("error_ok", "1");
+        router.replace("/error?message=" + encodeURIComponent("No se encontraron eventos. Revisa que los archivos tengan un calendario de evaluaciones."));
+        return;
+      }
       eventosData.sort((a: Evento, b: Evento) => {
         const fechaA = a.fecha ? new Date(a.fecha).getTime() : 0;
         const fechaB = b.fecha ? new Date(b.fecha).getTime() : 0;
         return fechaA - fechaB;
       });
       setEventos(eventosData);
+      const ramosRaw = sessionStorage.getItem("ramos_no_analizados");
+      if (ramosRaw) {
+        try {
+          const lista = JSON.parse(ramosRaw);
+          setRamosNoAnalizados(Array.isArray(lista) ? lista : []);
+        } catch {
+          setRamosNoAnalizados([]);
+        }
+      }
     } catch (e) {
       console.error(e);
+      sessionStorage.setItem("error_ok", "1");
+      router.replace("/error?message=" + encodeURIComponent("Error al cargar el calendario."));
     }
   }, [router]);
 
@@ -112,14 +159,14 @@ export default function ResultPage() {
     setDescargado(true);
   };
 
-  const agruparPorRamo = () => {
-    const grupos: Record<string, Evento[]> = {};
-    eventos.forEach(e => {
+  const agruparPorRamo = (): Record<string, (Evento & { _idx: number })[]> => {
+    const grupos: Record<string, (Evento & { _idx: number })[]> = {};
+    eventos.forEach((e, idx) => {
       const titulo = e.titulo || "Sin Título";
       const match = titulo.match(/^\[(.*?)\]/);
       const ramo = match ? match[1] : "General";
       if (!grupos[ramo]) grupos[ramo] = [];
-      grupos[ramo].push(e);
+      grupos[ramo].push({ ...e, _idx: idx });
     });
     return grupos;
   };
@@ -151,7 +198,7 @@ export default function ResultPage() {
 
 
             <button
-              onClick={() => { sessionStorage.clear(); router.push('/scan'); }}
+              onClick={() => { sessionStorage.removeItem("result_ok"); router.push("/scan"); }}
               className="w-full bg-white border-2 border-gray-300 text-gray-700 font-semibold py-3 rounded-xl text-sm hover:bg-gray-50 transition-colors"
             >
               Escanear otros ramos
@@ -188,33 +235,158 @@ export default function ResultPage() {
           </span>
         </div>
 
-        {/* Lista de Eventos */}
+        {ramosNoAnalizados.length > 0 && (
+          <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-xl">
+            <p className="text-sm font-semibold text-amber-800 mb-1">No se pudo analizar bien:</p>
+            <p className="text-sm text-amber-700">{ramosNoAnalizados.join(", ")}</p>
+            <p className="text-xs text-amber-600 mt-2">Revisa que los archivos no estén vacíos o dañados. Puedes volver a escanear y subir de nuevo solo ese ramo.</p>
+          </div>
+        )}
+
+        {/* Lista de Eventos por ramo */}
         <div className="space-y-6 mb-8">
           {Object.entries(grupos).map(([ramo, eventosRamo]) => (
             <div key={ramo} className="animate-in slide-in-from-bottom-4 duration-500">
               <h2 className="text-xs font-bold text-[#64748B] uppercase tracking-wider mb-3 ml-1">{ramo}</h2>
               
               <div className="bg-white border border-[#E2E8F0] rounded-xl overflow-hidden shadow-sm">
-                {eventosRamo.map((evento, i) => {
+                {eventosRamo.map((evento) => {
+                  const idx = evento._idx;
                   const { dia, mes } = formatearFecha(evento.fecha);
+                  const editando = editandoEventoIdx === idx;
+                  const tituloSinRamo = (evento.titulo || "Evento").replace(/^\[.*?\]\s*/, "");
                   return (
-                    <div key={i} className="flex items-center gap-4 p-4 border-b border-[#F1F5F9] last:border-0">
-                      {/* Fecha más grande */}
+                    <div key={idx} className="flex items-center gap-4 p-4 border-b border-[#F1F5F9] last:border-0">
+                      {/* Fecha o formulario de edición */}
                       <div className="flex flex-col items-center justify-center bg-slate-50 text-slate-700 rounded-xl w-16 h-16 flex-shrink-0 border border-slate-200">
-                        <span className="text-xl font-bold leading-none">{dia}</span>
-                        <span className="text-[0.65rem] font-bold uppercase mt-1">{mes}</span>
+                        {editando ? (
+                          <input
+                            type="date"
+                            defaultValue={evento.fecha}
+                            id={`fecha-${idx}`}
+                            className="w-14 text-[0.65rem] border border-slate-300 rounded px-1 py-0.5 bg-white"
+                          />
+                        ) : (
+                          <>
+                            <span className="text-xl font-bold leading-none">{dia}</span>
+                            <span className="text-[0.65rem] font-bold uppercase mt-1">{mes}</span>
+                          </>
+                        )}
                       </div>
                       
-                      {/* Contenido */}
+                      {/* Contenido o formulario */}
                       <div className="flex-1 min-w-0">
-                        <h3 className="text-base font-bold text-[#0F172A] mb-1">
-                          {(evento.titulo || "Evento").replace(/^\[.*?\]\s*/, '')}
-                        </h3>
-                        <p className="text-sm text-[#64748B]">{evento.descripcion}</p>
+                        {editando ? (
+                          <div className="space-y-2">
+                            <input
+                              type="text"
+                              defaultValue={tituloSinRamo}
+                              id={`titulo-${idx}`}
+                              placeholder="Título"
+                              className="w-full px-3 py-2 border border-[#E2E8F0] rounded-lg text-sm font-bold text-[#0F172A]"
+                            />
+                            <input
+                              type="text"
+                              defaultValue={evento.descripcion}
+                              id={`desc-${idx}`}
+                              placeholder="Descripción (opcional)"
+                              className="w-full px-3 py-2 border border-[#E2E8F0] rounded-lg text-sm text-[#64748B]"
+                            />
+                            <div className="flex gap-2 pt-1">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const tituloInput = document.getElementById(`titulo-${idx}`) as HTMLInputElement;
+                                  const fechaInput = document.getElementById(`fecha-${idx}`) as HTMLInputElement;
+                                  const descInput = document.getElementById(`desc-${idx}`) as HTMLInputElement;
+                                  const match = evento.titulo.match(/^\[(.*?)\]/);
+                                  const prefijo = match ? match[0] : `[${ramo}] `;
+                                  const titulo = (tituloInput?.value?.trim() || "").startsWith("[") ? tituloInput.value.trim() : prefijo + (tituloInput?.value?.trim() || "");
+                                  if (titulo && fechaInput?.value) actualizarEvento(idx, { titulo, fecha: fechaInput.value, descripcion: descInput?.value?.trim() || "" });
+                                }}
+                                className="text-sm font-medium text-[#0F172A] hover:underline"
+                              >
+                                Guardar
+                              </button>
+                              <button type="button" onClick={() => setEditandoEventoIdx(null)} className="text-sm text-[#64748B] hover:underline">Cancelar</button>
+                            </div>
+                          </div>
+                        ) : (
+                          <>
+                            <h3 className="text-base font-bold text-[#0F172A] mb-1">{tituloSinRamo}</h3>
+                            <p className="text-sm text-[#64748B]">{evento.descripcion}</p>
+                          </>
+                        )}
                       </div>
+                      
+                      {/* Botón editar a la derecha */}
+                      {!editando && (
+                        <button
+                          type="button"
+                          onClick={() => setEditandoEventoIdx(idx)}
+                          className="flex-shrink-0 p-2 rounded-lg text-[#94A3B8] hover:text-[#64748B] hover:bg-[#F1F5F9] transition-colors"
+                          title="Editar evento"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
+                        </button>
+                      )}
                     </div>
                   );
                 })}
+              </div>
+
+              {/* Agregar evento por ramo */}
+              <div className="mt-3">
+                {mostrarAgregarRamo !== ramo ? (
+                  <button
+                    type="button"
+                    onClick={() => setMostrarAgregarRamo(ramo)}
+                    className="w-full py-2.5 border border-dashed border-[#CBD5E1] rounded-lg text-[#64748B] text-sm font-medium hover:border-[#94A3B8] hover:text-[#475569] transition-colors"
+                  >
+                    + Agregar evento a {ramo}
+                  </button>
+                ) : (
+                  <div className="bg-white border border-[#E2E8F0] rounded-xl p-4 shadow-sm space-y-3">
+                    <h3 className="text-sm font-bold text-[#0F172A]">Nuevo evento en {ramo}</h3>
+                    <input
+                      type="text"
+                      placeholder="Título (ej: Examen parcial)"
+                      value={nuevoEvento.titulo}
+                      onChange={(e) => setNuevoEvento((p) => ({ ...p, titulo: e.target.value }))}
+                      className="w-full px-3 py-2 border border-[#E2E8F0] rounded-lg text-sm"
+                    />
+                    <input
+                      type="date"
+                      value={nuevoEvento.fecha}
+                      onChange={(e) => setNuevoEvento((p) => ({ ...p, fecha: e.target.value }))}
+                      className="w-full px-3 py-2 border border-[#E2E8F0] rounded-lg text-sm"
+                    />
+                    <input
+                      type="text"
+                      placeholder="Descripción (opcional)"
+                      value={nuevoEvento.descripcion}
+                      onChange={(e) => setNuevoEvento((p) => ({ ...p, descripcion: e.target.value }))}
+                      className="w-full px-3 py-2 border border-[#E2E8F0] rounded-lg text-sm"
+                    />
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => agregarEvento(ramo)}
+                        disabled={!nuevoEvento.titulo.trim() || !nuevoEvento.fecha}
+                        className="flex-1 bg-[#0F172A] text-white font-medium py-2 rounded-lg text-sm disabled:opacity-50 hover:bg-[#1E293B]"
+                      >
+                        Agregar
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { setMostrarAgregarRamo(null); setNuevoEvento({ titulo: "", fecha: "", descripcion: "" }); }}
+                        className="px-4 py-2 border border-[#E2E8F0] rounded-lg text-sm text-[#64748B] hover:bg-[#F8FAFC]"
+                      >
+                        Cancelar
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           ))}
@@ -231,7 +403,7 @@ export default function ResultPage() {
           </button>
 
           <button 
-            onClick={() => { sessionStorage.clear(); router.push('/scan'); }} 
+            onClick={() => { sessionStorage.removeItem("result_ok"); router.push("/scan"); }} 
             className="w-full bg-white border-2 border-gray-300 text-gray-700 font-semibold py-3 rounded-xl hover:bg-gray-50 active:scale-95 transition-all text-sm"
           >
             Escanear otros ramos

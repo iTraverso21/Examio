@@ -1,12 +1,19 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense } from "react";
+import { Suspense, useEffect } from "react";
 
 function ErrorContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const message = searchParams.get('message') || 'Ocurrió un error inesperado';
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (!sessionStorage.getItem("error_ok")) {
+      router.replace("/");
+    }
+  }, [router]);
 
   const getErrorInfo = () => {
     if (message.includes('límite') || message.includes('Límite')) {
@@ -45,14 +52,14 @@ function ErrorContent() {
 
         <div className="space-y-3">
           <button
-            onClick={() => router.push('/scan')}
+            onClick={() => { sessionStorage.removeItem("error_ok"); router.push('/scan'); }}
             className="w-full bg-[#0F172A] hover:bg-[#1E293B] text-white font-semibold py-4 rounded-xl shadow-lg transition-all"
           >
             {info.action}
           </button>
 
           <button
-            onClick={() => router.push('/')}
+            onClick={() => { sessionStorage.removeItem("error_ok"); router.push('/'); }}
             className="w-full text-[#64748B] hover:text-[#0F172A] font-medium py-3 text-sm transition-colors"
           >
             Volver al inicio
