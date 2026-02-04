@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useScan } from "../context/ScanContext";
 
@@ -11,11 +11,76 @@ export default function ScanPage() {
   const [analizando, setAnalizando] = useState(false);
   const [progreso, setProgreso] = useState({ actual: 0, total: 0, archivo: "" });
   const [errorToast, setErrorToast] = useState<string | null>(null);
+  
+  // Estado para saber sobre qué ramo está el mouse (hover normal)
+  const [ramoHover, setRamoHover] = useState<number | null>(null);
+  
+  // NUEVO: Estado para saber en qué ramo se está ARRASTRANDO un archivo
+  const [dragActiveId, setDragActiveId] = useState<number | null>(null);
 
   const mostrarError = (mensaje: string) => {
     setErrorToast(mensaje);
     setTimeout(() => setErrorToast(null), 3000);
   };
+
+  // Efecto global para escuchar Ctrl+V
+  useEffect(() => {
+    const handleGlobalPaste = (e: ClipboardEvent) => {
+      if (ramoHover === null) return;
+
+      const items = e.clipboardData?.items;
+      if (!items) return;
+
+      let archivosEncontrados = false;
+
+      for (let i = 0; i < items.length; i++) {
+        if (items[i].type.indexOf('image') !== -1 || items[i].type.indexOf('pdf') !== -1) {
+          const blob = items[i].getAsFile();
+          if (blob) {
+            archivosEncontrados = true;
+            const ext = items[i].type.includes('pdf') ? 'pdf' : 'png';
+            const file = new File([blob], `pegado-${Date.now()}.${ext}`, { type: blob.type });
+
+            setRamos(prevRamos => prevRamos.map(r => {
+              if (r.id === ramoHover && r.archivos.length < 3) {
+                return { ...r, archivos: [...r.archivos, file] };
+              }
+              return r;
+            }));
+          }
+        }
+      }
+
+      if (archivosEncontrados) {
+        e.preventDefault(); 
+      }
+    };
+
+    window.addEventListener("paste", handleGlobalPaste);
+    return () => window.removeEventListener("paste", handleGlobalPaste);
+  }, [ramoHover, setRamos]);
+
+  // --- FUNCIONES DE DRAG & DROP ---
+  const handleDrag = (e: React.DragEvent, id: number) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.type === "dragenter" || e.type === "dragover") {
+      setDragActiveId(id);
+    } else if (e.type === "dragleave") {
+      setDragActiveId(null);
+    }
+  };
+
+  const handleDrop = (e: React.DragEvent, id: number) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragActiveId(null);
+    
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      agregarArchivos(id, e.dataTransfer.files);
+    }
+  };
+  // -------------------------------
 
   const agregarRamo = () => {
     if (ramos.length >= 5) return mostrarError("Máximo 5 ramos por sesión");
@@ -52,24 +117,8 @@ export default function ScanPage() {
     }));
   };
 
-  const handlePaste = (ramoId: number, e: React.ClipboardEvent) => {
-    const items = e.clipboardData?.items;
-    if (!items) return;
-
-    for (let i = 0; i < items.length; i++) {
-      if (items[i].type.indexOf('image') !== -1) {
-        const blob = items[i].getAsFile();
-        if (blob) {
-          const file = new File([blob], `pasted-${Date.now()}.png`, { type: blob.type });
-          setRamos(ramos.map(r => {
-            if (r.id === ramoId && r.archivos.length < 3) {
-              return { ...r, archivos: [...r.archivos, file] };
-            }
-            return r;
-          }));
-        }
-      }
-    }
+  const handlePasteLocal = (ramoId: number, e: React.ClipboardEvent) => {
+    e.stopPropagation();
   };
 
   const analizar = async () => {
@@ -151,91 +200,233 @@ export default function ScanPage() {
 
   if (analizando) {
     return (
-      <main className="min-h-screen flex items-center justify-center p-4">
-        <div className="max-w-md w-full text-center">
+      <main className="relative min-h-screen flex items-center justify-center p-4 bg-[#F8FAFC] overflow-hidden animate-slide-down">
+        {/* Iluminación de fondo */}
+        <div className="absolute top-[-10%] left-1/2 -translate-x-1/2 w-[120%] h-[60%] bg-[radial-gradient(circle_at_center,rgba(203,213,225,0.25)_0%,rgba(241,245,249,0.1)_40%,transparent_70%)] pointer-events-none" />
+        
+        <div className="max-w-md w-full text-center relative z-10">
           <div className="mb-8">
-            <div className="w-16 h-16 border-4 border-[#CBD5E1] border-t-[#0F172A] rounded-full animate-spin mx-auto"></div>
+            <div className="w-20 h-20 border-[3px] border-slate-200 border-t-slate-700 rounded-full animate-spin mx-auto"></div>
           </div>
-          <h2 className="text-2xl font-bold text-[#020617] mb-2">Analizando tus archivos...</h2>
-          <p className="text-sm text-[#64748B] mb-8 font-medium">Ramo {progreso.actual} de {progreso.total}</p>
-          <div className="w-full bg-[#E2E8F0] rounded-full h-2 mb-4 overflow-hidden">
-            <div className="bg-[#0F172A] h-2 rounded-full transition-all duration-300 ease-out" style={{ width: `${(progreso.actual / progreso.total) * 100}%` }}></div>
+          <h2 className="text-2xl font-bold text-slate-900 mb-3">Analizando tus archivos...</h2>
+          <p className="text-sm text-slate-500 mb-8 font-medium">Ramo {progreso.actual} de {progreso.total}</p>
+          
+          <div className="w-full bg-slate-100 rounded-full h-2.5 mb-4 overflow-hidden shadow-inner">
+            <div 
+              className="bg-slate-700 h-2.5 rounded-full transition-all duration-500 ease-out" 
+              style={{ width: `${(progreso.actual / progreso.total) * 100}%` }}
+            ></div>
           </div>
-          <p className="text-xs text-[#94A3B8] font-mono truncate">{progreso.archivo}</p>
+          
+          <div className="bg-white rounded-2xl px-4 py-3 shadow-sm border border-slate-100 inline-block">
+            <p className="text-xs text-slate-600 font-medium truncate max-w-xs">{progreso.archivo}</p>
+          </div>
         </div>
       </main>
     );
   }
 
   return (
-    <main className="min-h-screen p-4 pb-28 relative">
+    <main className="relative min-h-screen p-4 pb-28 bg-[#F8FAFC] overflow-hidden animate-slide-down">
+      {/* Iluminación de fondo */}
+      <div className="absolute top-[-10%] left-1/2 -translate-x-1/2 w-[120%] h-[60%] bg-[radial-gradient(circle_at_center,rgba(203,213,225,0.25)_0%,rgba(241,245,249,0.1)_40%,transparent_70%)] pointer-events-none" />
+      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-[300px] bg-[radial-gradient(circle_at_50%_0%,rgba(59,130,246,0.03)_0%,transparent_60%)] pointer-events-none" />
+      
+      {/* Toast de error */}
       {errorToast && (
         <div className="fixed top-6 left-1/2 transform -translate-x-1/2 z-50 animate-fade-in-down w-full max-w-sm px-4">
-          <div className="bg-[#EF4444] text-white px-4 py-3 rounded-xl shadow-lg flex items-center gap-3">
+          <div className="bg-red-500 text-white px-5 py-4 rounded-[20px] shadow-lg shadow-red-500/20 flex items-center gap-3 backdrop-blur-sm">
+            <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
             <span className="font-semibold text-sm">{errorToast}</span>
           </div>
         </div>
       )}
 
-      <div className="max-w-2xl mx-auto pt-4">
-        <div className="mb-8">
-          <button onClick={() => router.push('/')} className="text-[#64748B] hover:text-[#0F172A] text-sm font-semibold mb-6 flex items-center gap-2 transition-colors">
-            ← Volver
+      <div className="max-w-xl mx-auto pt-4 relative z-10">
+        
+        {/* Header */}
+        <div className="mb-6">
+          <button 
+            onClick={() => router.push('/')} 
+            className="text-slate-500 hover:text-slate-900 text-sm font-semibold mb-6 flex items-center gap-2 transition-all hover:-translate-x-1 duration-200"
+          >
+            <svg className="w-9 h-9" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15 19l-7-7 7-7" />
+            </svg>
+            Volver
           </button>
-          <h1 className="text-3xl font-bold text-[#0F172A] mb-2 tracking-tight">Sube tus Ramos</h1>
-          <p className="text-sm text-[#64748B]">Máximo 5 ramos • 3 archivos por ramo</p>
+          <h1 className="text-4xl font-black text-slate-900 mb-2 tracking-tight">Sube tus Ramos</h1>
+          <p className="text-sm text-slate-500 font-medium">Máximo 5 ramos • 3 archivos por ramo</p>
         </div>
 
-        <div className="space-y-6 mb-8">
-          {ramos.map((ramo, index) => (
-            <div key={ramo.id} className="bg-white border border-[#E2E8F0] rounded-xl p-5 shadow-sm hover:border-[#0F172A] transition-all duration-200 group">
-              <div className="flex items-center gap-4 mb-5">
-                <div className="w-7 h-7 bg-[#F1F5F9] rounded-md flex items-center justify-center text-[#0F172A] font-bold text-sm">{index + 1}</div>
-                <input 
-                  type="text" placeholder="Ej: Cálculo I" value={ramo.nombre}
-                  onChange={(e) => actualizarNombre(ramo.id, e.target.value)}
-                  className="flex-1 text-lg font-semibold text-[#020617] placeholder:text-[#94A3B8] bg-transparent border-b border-transparent focus:border-[#0F172A] outline-none pb-1 transition-colors"
-                />
-                {ramos.length > 1 && (
-                  <button onClick={() => eliminarRamo(ramo.id)} className="text-[#94A3B8] hover:text-[#EF4444] transition-colors">
-                    ✕
-                  </button>
-                )}
-              </div>
+        {/* Lista de ramos */}
+        <div className="space-y-4 mb-8">
+          {ramos.map((ramo, index) => {
+            // isHovered: para bordes azules al pasar el mouse
+            const isHovered = ramoHover === ramo.id;
+            // isDragActive: para resaltar fuerte cuando se arrastra un archivo encima
+            const isDragActive = dragActiveId === ramo.id;
 
-              <div className="bg-[#F8FAFC] border border-dashed border-[#CBD5E1] rounded-lg p-6 transition-colors group-hover:bg-[#F1F5F9] group-hover:border-[#94A3B8]" onPaste={(e) => handlePaste(ramo.id, e)}>
-                <input type="file" accept=".pdf,.doc,.docx,image/*" multiple onChange={(e) => agregarArchivos(ramo.id, e.target.files)} className="hidden" id={`file-${ramo.id}`} />
-                <label htmlFor={`file-${ramo.id}`} className="block text-center cursor-pointer">
-                  <div className="text-2xl mb-2 opacity-50">📎</div>
-                  <p className="text-sm font-semibold text-[#0F172A] mb-1">Click para subir o Ctrl+V</p>
-                  <p className="text-xs text-[#64748B]">PDF, Word o imágenes (Máx 3)</p>
-                </label>
-                {ramo.archivos.length > 0 && (
-                  <div className="mt-4 space-y-2 border-t border-[#E2E8F0] pt-3">
-                    {ramo.archivos.map((archivo, i) => (
-                      <div key={i} className="flex items-center gap-3 bg-white border border-[#E2E8F0] rounded-md p-2">
-                        <div className="w-2 h-2 rounded-full bg-[#22C55E]"></div>
-                        <span className="text-xs font-medium text-[#475569] flex-1 truncate">{archivo.name}</span>
-                        <button onClick={() => eliminarArchivo(ramo.id, i)} className="text-[#94A3B8] hover:text-[#EF4444] p-1">✕</button>
-                      </div>
-                    ))}
+            return (
+              <div 
+                key={ramo.id}
+                onMouseEnter={() => setRamoHover(ramo.id)}
+                onMouseLeave={() => setRamoHover(null)}
+                onPaste={(e) => handlePasteLocal(ramo.id, e)}
+                tabIndex={0}
+                // Si se está arrastrando algo encima, el borde se pone azul fuerte y grueso
+                className={`bg-white rounded-[24px] p-5 shadow-sm border transition-all duration-200 group outline-none
+                  ${isDragActive
+                    ? 'border-blue-500 ring-4 ring-blue-500/20 shadow-lg scale-[1.01]' // Estilo Drag Activo
+                    : isHovered 
+                      ? 'border-blue-400 ring-2 ring-blue-500/10 shadow-md' // Estilo Hover
+                      : 'border-slate-100 hover:border-slate-200'           // Estilo Normal
+                  }
+                `}
+              >
+                {/* Header del ramo */}
+                <div className="flex items-center gap-4 mb-4">
+                  <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold text-sm transition-colors
+                    ${(isHovered || isDragActive) ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-700'}
+                  `}>
+                    {index + 1}
                   </div>
-                )}
+                  <input 
+                    type="text" 
+                    placeholder="Ej: Cálculo I" 
+                    value={ramo.nombre}
+                    onChange={(e) => actualizarNombre(ramo.id, e.target.value)}
+                    className="flex-1 text-lg font-bold text-slate-900 placeholder:text-slate-400 bg-transparent border-b-2 border-transparent focus:border-slate-700 outline-none pb-2 transition-colors"
+                  />
+                  {ramos.length > 1 && (
+                    <button 
+                      onClick={() => eliminarRamo(ramo.id)} 
+                      className="text-slate-400 hover:text-red-500 transition-colors p-1"
+                    >
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  )}
+                </div>
+
+                {/* Zona de carga con Drag & Drop */}
+                <div 
+                  className={`bg-slate-50 border-2 border-dashed rounded-[20px] p-6 transition-all outline-none relative
+                    ${isDragActive 
+                      ? 'border-blue-500 bg-blue-50' // Color al arrastrar archivo encima
+                      : isHovered 
+                        ? 'border-blue-300 bg-blue-50/30' // Color al pasar mouse (listo para pegar)
+                        : 'border-slate-200 group-hover:bg-slate-100/50 group-hover:border-slate-300'
+                    }
+                  `}
+                  // EVENTOS DE DRAG & DROP
+                  onDragEnter={(e) => handleDrag(e, ramo.id)}
+                  onDragLeave={(e) => handleDrag(e, ramo.id)}
+                  onDragOver={(e) => handleDrag(e, ramo.id)}
+                  onDrop={(e) => handleDrop(e, ramo.id)}
+                >
+                  <input 
+                    type="file" 
+                    accept=".pdf,.doc,.docx,image/*" 
+                    multiple 
+                    onChange={(e) => agregarArchivos(ramo.id, e.target.files)} 
+                    className="hidden" 
+                    id={`file-${ramo.id}`} 
+                  />
+                  <label htmlFor={`file-${ramo.id}`} className="block text-center cursor-pointer w-full h-full relative z-10">
+                    
+                    {/* Icono */}
+                    <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center mx-auto mb-3 shadow-sm border border-slate-100 group-hover:scale-110 transition-transform duration-300">
+                      <svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                      </svg>
+                    </div>
+                    
+                    {/* Texto */}
+                    <div className="flex flex-col items-center gap-1">
+                      {isDragActive ? (
+                        <span className="text-sm font-bold text-blue-600 animate-pulse">¡Suelta los archivos aquí!</span>
+                      ) : (
+                        <div className="text-sm font-bold text-slate-900 flex items-center gap-2 justify-center">
+                          <span className="md:hidden">Toca para subir</span>
+                          <span className="hidden md:inline">Click, Arrastra o Pega</span>
+                          <span className={`hidden md:flex items-center gap-1 bg-white border px-1.5 py-0.5 rounded text-[10px] font-medium shadow-sm select-none transition-colors
+                            ${isHovered ? 'border-blue-200 text-blue-600' : 'border-slate-200 text-slate-500'}
+                          `}>
+                            <kbd className="font-sans">Ctrl</kbd><span>+</span><kbd className="font-sans">V</kbd>
+                          </span>
+                        </div>
+                      )}
+                      
+                      {!isDragActive && (
+                        <p className="text-[11px] text-slate-500">PDF, Word o imágenes • Máx 3 archivos</p>
+                      )}
+                    </div>
+
+                  </label>
+
+                  {/* Lista de archivos */}
+                  {ramo.archivos.length > 0 && (
+                    <div className="mt-4 space-y-2 border-t border-slate-200 pt-3 relative z-20">
+                      {ramo.archivos.map((archivo, i) => (
+                        <div 
+                          key={i} 
+                          className="flex items-center gap-3 bg-white rounded-xl p-2.5 shadow-sm border border-slate-100 group/file hover:border-slate-200 transition-all"
+                        >
+                          <div className="w-2 h-2 rounded-full bg-emerald-500 flex-shrink-0"></div>
+                          <span className="text-xs font-medium text-slate-700 flex-1 truncate text-left">{archivo.name}</span>
+                          <button 
+                            onClick={(e) => {
+                              e.preventDefault(); 
+                              eliminarArchivo(ramo.id, i);
+                            }} 
+                            className="text-slate-400 hover:text-red-500 p-1.5 rounded-full hover:bg-red-50 transition-colors"
+                            title="Eliminar archivo"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
 
+        {/* Botón agregar ramo */}
         {ramos.length < 5 && (
-          <button onClick={agregarRamo} className="w-full py-4 border border-dashed border-[#94A3B8] rounded-xl text-[#64748B] font-semibold hover:bg-white hover:text-[#0F172A] hover:border-[#0F172A] transition-all mb-8">
-            + Agregar otro ramo
+          <button 
+            onClick={agregarRamo} 
+            className="w-full py-4 border-2 border-dashed border-slate-300 rounded-[20px] text-slate-600 font-bold hover:bg-white hover:text-slate-900 hover:border-slate-400 transition-all mb-8 flex items-center justify-center gap-2 text-sm"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 4v16m8-8H4" />
+            </svg>
+            Agregar otro ramo
           </button>
         )}
 
-        <div className="fixed bottom-0 left-0 right-0 bg-white/80 backdrop-blur-md border-t border-[#E2E8F0] p-4 md:relative md:bg-transparent md:border-0 md:p-0 md:backdrop-blur-none">
-          <button onClick={analizar} disabled={analizando} className="w-full bg-[#0F172A] hover:bg-[#1E293B] text-white text-lg font-semibold py-4 rounded-xl shadow-lg transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed">
-            Analizar Ramos
-          </button>
+        {/* Botón analizar (fijo en mobile) */}
+        <div className="fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-lg border-t border-slate-200 p-4 md:relative md:bg-transparent md:border-0 md:p-0 md:backdrop-blur-none shadow-lg md:shadow-none">
+          <div className="max-w-xl mx-auto">
+            <button 
+              onClick={analizar} 
+              disabled={analizando} 
+              className="w-full bg-[#334155] hover:bg-[#1e293b] text-white text-lg font-bold py-4 rounded-[24px] shadow-lg shadow-slate-900/10 transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+              </svg>
+              Analizar Ramos
+            </button>
+          </div>
         </div>
       </div>
     </main>
