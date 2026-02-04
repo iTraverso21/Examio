@@ -59,6 +59,7 @@ async function analizarRamoCompleto(model: any, files: File[], nombreRamo: strin
       2. Si el documento tiene fechas antiguas (2023, 2024...), IGNORE EL AÑO VIEJO y usa ${currentYear}.
       3. Si solo dice "12 de Octubre", asume ${currentYear}-10-12.
       4. Formato de salida: YYYY-MM-DD.
+      5. Si no hay fecha asociada a un evento, o dice 'Pendiente'/'Por definir', en el campo fecha devuelve exactamente el string 'TBD'.
 
       REGLAS DE EXTRACCIÓN (MUY IMPORTANTE):
       1. QUÉ BUSCAR: Detecta Pruebas, Exámenes, Controles, Interrogaciones, Entregas de Proyecto, Tareas, Informes, Presentaciones y Laboratorios.
