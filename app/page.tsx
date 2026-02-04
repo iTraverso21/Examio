@@ -1,137 +1,176 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import Image from "next/image"; // Importamos Image para el logo
+import { Lexend } from "next/font/google";
+import { 
+  Upload, 
+  ArrowRight, 
+  FileText, 
+  CheckCircle2, 
+  Smartphone, 
+  Monitor, 
+  Zap
+} from "lucide-react";
+
+// Configuración de la fuente Lexend
+const lexend = Lexend({ 
+  subsets: ["latin"],
+  weight: ["300", "400", "500", "600", "700", "900"],
+  variable: "--font-lexend",
+});
 
 export default function Home() {
   const router = useRouter();
-  const [mostrarAyuda, setMostrarAyuda] = useState(false);
 
   return (
-    <main className="min-h-screen flex items-center justify-center p-4 bg-[#F8FAFC]">
-      <div className="max-w-md w-full text-center">
+    <main className={`relative min-h-screen w-full bg-[#f6f7f7] text-[#334155] ${lexend.className} selection:bg-slate-200 animate-slide-down`}>
+      
+      {/* Fondo sutil (Luz superior) */}
+      <div className="fixed inset-0 pointer-events-none bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.8)_0%,transparent_50%)]" />
+
+      <div className="relative flex flex-col items-center w-full min-h-screen">
         
-        {/* LOGO/NOMBRE */}
-        <div className="mb-10 animate-in fade-in zoom-in duration-500">
-          <h1 className="text-6xl font-extrabold text-[#0F172A] mb-4 tracking-tight">
+        {/* --- HEADER --- */}
+        <header className="w-full max-w-[1000px] flex items-center justify-between px-6 py-8 z-10">
+          <div className="flex items-center gap-3">
+            <div className="relative w-15 h-15 rounded-full overflow-hidden shadow-lg shadow-slate-200 border border-slate-100">
+              <Image 
+                src="/examio_logo.png" 
+                alt="Logo Examio" 
+                fill 
+                className="object-cover" 
+              />
+            </div>
+            <span className="text-[#0f172a] font-bold text-2xl tracking-tighter">Examio</span>
+          </div>
+          
+          <nav className="hidden md:flex items-center gap-8">
+            <a href="#how-it-works" className="text-slate-500 hover:text-[#334155] transition-colors text-xs font-bold uppercase tracking-widest">Proceso</a>
+            <a href="#faq" className="text-slate-500 hover:text-[#334155] transition-colors text-xs font-bold uppercase tracking-widest">FAQ</a>
+          </nav>
+        </header>
+
+        {/* --- HERO SECTION --- */}
+        <div className="flex-1 flex flex-col items-center justify-center text-center px-4 max-w-[800px] py-12">
+          <h1 className="text-[#0f172a] text-7xl md:text-8xl font-black tracking-tighter mb-6 drop-shadow-sm">
             Examio
           </h1>
-          <p className="text-lg text-[#64748B] font-medium leading-relaxed">
-            Organiza tu vida académica en segundos.<br/>
-            Sube tu PDF y crea tu calendario.
+          <p className="text-slate-500 text-lg md:text-xl font-medium max-w-lg mb-12 leading-relaxed">
+            Tus ramos al calendario en segundos.<br/>Simple, rápido y completamente gratis.
           </p>
+          
+          <div className="p-2 bg-white rounded-[2rem] shadow-xl shadow-slate-200/60 border border-slate-100">
+            <button 
+              onClick={() => router.push('/scan')}
+              className="flex items-center gap-4 bg-[#334155] hover:bg-[#1e293b] text-white px-10 py-5 md:px-12 md:py-6 rounded-3xl text-xl font-bold transition-all active:scale-[0.98] group shadow-lg shadow-slate-900/20"
+            >
+              <Upload className="w-6 h-6" />
+              <span>Escanear Ramos</span>
+              <ArrowRight className="w-6 h-6 group-hover:translate-x-1 transition-transform opacity-50" />
+            </button>
+          </div>
+          <p className="mt-6 text-slate-400 text-xs font-bold tracking-wide uppercase">Soporta PDF, Word y Capturas</p>
         </div>
 
-        {/* BOTÓN PRINCIPAL (CTA) */}
-        <button
-          onClick={() => router.push('/scan')}
-          className="w-full bg-[#0F172A] hover:bg-[#1E293B] text-white text-xl font-bold py-6 px-8 rounded-2xl shadow-xl shadow-slate-200 transition-all transform hover:scale-[1.02] active:scale-95 mb-8 flex items-center justify-center gap-3"
-        >
-          Escanear Ramos
-        </button>
+        {/* --- HOW IT WORKS (Horizontal Cards) --- */}
+        <section id="how-it-works" className="w-full max-w-[850px] px-6 py-12 scroll-mt-20">
+          
+          {/* Título Agregado Aquí */}
+          <div className="text-center mb-10">
+             <h2 className="text-[#0f172a] text-2xl font-black tracking-tight">¿Cómo funciona?</h2>
+          </div>
 
-        {/* SECCIÓN DE AYUDA (MINIMALISTA) */}
-        <div className="mb-8">
-          <button
-            onClick={() => setMostrarAyuda(!mostrarAyuda)}
-            className={`w-full text-sm font-medium py-3 px-5 rounded-xl transition-all duration-300 flex items-center justify-between group border ${
-              mostrarAyuda 
-                ? "bg-white text-[#0F172A] border-gray-300 shadow-sm" 
-                : "bg-transparent text-[#64748B] border-transparent hover:bg-white hover:border-gray-200 hover:shadow-sm"
-            }`}
-          >
-            <span className="flex items-center gap-2.5">
-              <svg className={`w-4 h-4 transition-colors ${mostrarAyuda ? 'text-[#0F172A]' : 'text-gray-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-              </svg>
-              ¿Dónde se guardará mi calendario?
-            </span>
-            <span className={`text-gray-400 transition-transform duration-300 ${mostrarAyuda ? 'rotate-180 text-[#0F172A]' : ''}`}>
-              ▼
-            </span>
-          </button>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            
+            {/* Card 1 */}
+            <div className="flex flex-col p-8 rounded-3xl bg-white border border-slate-100 shadow-sm hover:shadow-md transition-shadow">
+              <div className="w-12 h-12 rounded-2xl bg-[#334155]/5 flex items-center justify-center mb-5">
+                <FileText className="w-6 h-6 text-[#334155]" />
+              </div>
+              <h4 className="text-[#0f172a] text-lg font-bold mb-2">1. Sube tu Archivo o Foto</h4>
+              <p className="text-slate-500 text-sm leading-relaxed">Carga el programa de tu curso o el calendario académico. Aceptamos cualquier formato.</p>
+            </div>
+            
+            {/* Card 2 */}
+            <div className="flex flex-col p-8 rounded-3xl bg-white border border-slate-100 shadow-sm hover:shadow-md transition-shadow">
+              <div className="w-12 h-12 rounded-2xl bg-[#334155]/5 flex items-center justify-center mb-5">
+                <CheckCircle2 className="w-6 h-6 text-[#334155]" />
+              </div>
+              <h4 className="text-[#0f172a] text-lg font-bold mb-2">2. Descarga tu calendario</h4>
+              <p className="text-slate-500 text-sm leading-relaxed">Obtén un archivo mágico (.ics) compatible con Google Calendar, Outlook y Apple.</p>
+            </div>
 
-          {/* CONTENIDO DE AYUDA (TRANSICIÓN SUAVE) */}
-          <div 
-            className={`overflow-hidden transition-all duration-300 ease-in-out ${
-              mostrarAyuda ? "max-h-96 opacity-100 mt-3" : "max-h-0 opacity-0 mt-0"
-            }`}
-          >
-            <div className="bg-white border border-gray-100 rounded-2xl p-1 text-left shadow-sm">
-              <div className="space-y-1">
-                
-                {/* iPhone */}
-                <div className="group flex items-start gap-4 p-4 rounded-xl hover:bg-slate-50 transition-colors">
-                  <div className="mt-0.5 p-2 bg-slate-50 rounded-lg group-hover:bg-white transition-colors">
-                    <svg className="w-5 h-5 text-slate-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>
-                  </div>
-                  <div>
-                    <p className="font-bold text-[#0F172A] text-xs uppercase tracking-wide mb-1">iPhone / iPad</p>
-                    <p className="text-xs text-[#64748B] leading-relaxed">
-                      Se guarda en <b>Apple Calendar</b>. Para Google Calendar, hazlo desde PC.
-                    </p>
-                  </div>
+          </div>
+        </section>
+
+        {/* --- FAQ / GUIDE (Grid de 3 columnas) --- */}
+        <section id="faq" className="w-full max-w-[850px] px-6 pb-20 scroll-mt-20">
+          <div className="bg-white rounded-3xl p-8 border border-slate-100 shadow-sm">
+            <h3 className="text-slate-400 text-[11px] font-black uppercase tracking-[0.3em] mb-8 text-center">Guía de Implementación</h3>
+            
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8 md:gap-6">
+              {/* iOS */}
+              <div className="text-center md:text-left group">
+                <div className="flex items-center gap-2 mb-2 justify-center md:justify-start">
+                  <Smartphone className="w-5 h-5 text-slate-400 group-hover:text-[#334155] transition-colors" />
+                  <span className="text-[#0f172a] text-sm font-bold">iOS</span>
                 </div>
+                <p className="text-slate-500 text-xs leading-relaxed">Pulsa el archivo descargado y selecciona <span className="text-[#334155] font-semibold">'Añadir todos'</span>, se agregará automáticamente a Apple Calendar.</p>
+              </div>
 
-                <div className="h-px bg-gray-50 mx-4"></div>
-
-                {/* Android */}
-                
-                <div className="group flex items-start gap-4 p-4 rounded-xl hover:bg-slate-50 transition-colors">
-                  <div className="mt-0.5 p-2 bg-slate-50 rounded-lg group-hover:bg-white transition-colors">
-                    <svg className="w-5 h-5 text-slate-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      {/* Icono Android (Celular sin botón home + speaker arriba) */}
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 4h4m-4 0a2 2 0 00-2 2v12a2 2 0 002 2h4a2 2 0 002-2V6a2 2 0 00-2-2m-4 0V4"></path>
+              {/* Android */}
+              <div className="text-center md:text-left group">
+                <div className="flex items-center gap-2 mb-2 justify-center md:justify-start">
+                  <div className="w-7 h-7 flex items-center justify-center">
+                    {/* SVG personalizado del Robot de Android estilo Lucide */}
+                    <svg 
+                      className="w-7 h-7 text-slate-400 group-hover:text-[#334155] transition-colors" 
+                      viewBox="0 0 24 24" 
+                      fill="none" 
+                      stroke="currentColor" 
+                      strokeWidth="2" 
+                      strokeLinecap="round" 
+                      strokeLinejoin="round"
+                    >
+                      <line x1="7" y1="4" x2="9" y2="7" />
+                      <line x1="17" y1="4" x2="15" y2="7" />
+                      <path d="M4 15h16c0-4.4-3.6-8-8-8s-8 3.6-8 8" />
+                      <line x1="9" y1="11" x2="9.01" y2="11" />
+                      <line x1="15" y1="11" x2="15.01" y2="11" />
                     </svg>
                   </div>
-                  <div>
-                    <p className="font-bold text-[#0F172A] text-xs uppercase tracking-wide mb-1">Android</p>
-                    <p className="text-xs text-[#64748B] leading-relaxed">
-                      Elige <b>Google Calendar</b> al abrir el archivo y dale a Guardar.
-                    </p>
-                  </div>
+                  <span className="text-[#0f172a] text-sm font-bold">Android</span>
                 </div>
+                <p className="text-slate-500 text-xs leading-relaxed">Abre el archivo con la app de <span className="text-[#334155] font-semibold">Google Calendar</span>.</p>
+              </div>
 
-                <div className="h-px bg-gray-50 mx-4"></div>
-
-                {/* PC */}
-                <div className="group flex items-start gap-4 p-4 rounded-xl hover:bg-slate-50 transition-colors">
-                  <div className="mt-0.5 p-2 bg-slate-50 rounded-lg group-hover:bg-white transition-colors">
-                    <svg className="w-5 h-5 text-slate-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg>
-                  </div>
-                  <div>
-                    <p className="font-bold text-[#0F172A] text-xs uppercase tracking-wide mb-1">Computador</p>
-                    <p className="text-xs text-[#64748B] leading-relaxed">
-                      Importa el archivo en <i>calendar.google.com</i> para máxima seguridad.
-                    </p>
-                  </div>
+              {/* Desktop */}
+              <div className="text-center md:text-left group">
+                <div className="flex items-center gap-2 mb-2 justify-center md:justify-start">
+                  <Monitor className="w-5 h-5 text-slate-400 group-hover:text-[#334155] transition-colors" />
+                  <span className="text-[#0f172a] text-sm font-bold">PC / Mac</span>
                 </div>
-
+                <p className="text-slate-500 text-xs leading-relaxed">Importa vía Outlook, iCal o <span className="text-[#334155] font-semibold">Google Calendar</span>.</p>
               </div>
             </div>
           </div>
-        </div>
+        </section>
 
-        {/* PASOS (Ultra Minimalistas) */}
-        <div className="grid grid-cols-2 gap-4 mt-8 opacity-60 hover:opacity-100 transition-opacity">
-          <div className="flex flex-col items-center gap-2">
-            <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center text-lg shadow-sm border border-gray-100">
-              📄
-            </div>
-            <p className="text-[10px] font-semibold text-[#64748B] uppercase tracking-wide">1. Sube PDF</p>
+        {/* --- FOOTER --- */}
+        <footer className="w-full py-8 mt-auto border-t border-slate-200 bg-white/50 backdrop-blur-sm text-center">
+          <div className="flex items-center justify-center gap-3 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">
+            <span>Gratis</span>
+            <span className="text-slate-300">•</span>
+            <span>Sin Cuenta</span>
+            <span className="text-slate-300">•</span>
+            <span className="flex items-center gap-1.5">
+               Powered by Gemini AI
+               <Zap className="w-3 h-3 fill-slate-400" />
+            </span>
           </div>
-          <div className="flex flex-col items-center gap-2">
-            <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center text-lg shadow-sm border border-gray-100">
-              📅
-            </div>
-            <p className="text-[10px] font-semibold text-[#64748B] uppercase tracking-wide">2. Descarga</p>
-          </div>
-        </div>
+        </footer>
 
-        {/* FOOTER */}
-        <p className="mt-12 text-[10px] text-[#94A3B8] font-medium uppercase tracking-widest">
-          Gratis • Sin Cuenta • Powered by Gemini AI
-        </p>
       </div>
     </main>
   );
