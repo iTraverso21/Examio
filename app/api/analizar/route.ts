@@ -1,9 +1,22 @@
 import { NextResponse } from "next/server";
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import { Redis } from "@upstash/redis";
+import crypto from "crypto";
 
 export const dynamic = "force-dynamic";
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
+
+const redis = new Redis({
+  url: process.env.UPSTASH_REDIS_REST_URL!,
+  token: process.env.UPSTASH_REDIS_REST_TOKEN!,
+});
+
+async function generarHashArchivo(file: File) {
+  const arrayBuffer = await file.arrayBuffer();
+  const buffer = Buffer.from(arrayBuffer);
+  return crypto.createHash("md5").update(buffer).digest("hex");
+}
 
 export async function POST(request: Request) {
   try {
@@ -25,8 +38,26 @@ export async function POST(request: Request) {
       return NextResponse.json({ eventos: [] });
     }
 
-    const eventos = await analizarRamoCompleto(model, archivos, nombreRamo);
+    const hashesIndividuales = await Promise.all(archivos.map(generarHashArchivo));
+    // Ordenamos los hashes para que el orden de subida no importe (Archivo A + Archivo B sea igual a B + A)
+    const hashCombinado = hashesIndividuales.sort().join("-");
+    // Creamos la llave para Redis. Incluimos el modelo para invalidar caché si cambias de versión de IA.
+    const cacheKey = `cache:examio:gemini-2.5:${hashCombinado}`;
+    // 2. Preguntamos a Redis si ya tiene esta respuesta
+    const respuestaEnCache = await redis.get(cacheKey);
 
+    if (respuestaEnCache) {
+      console.log("⚡ HIT CACHÉ: Respondiendo desde Redis (Gratis)");
+      // Si existe, devolvemos el JSON guardado directamente. Ahorro total.
+      return NextResponse.json({ eventos: respuestaEnCache });
+    }
+    console.log("🤖 MISS CACHÉ: Llamando a Gemini...");
+
+    const eventos = await analizarRamoCompleto(model, archivos, nombreRamo);
+    if (eventos.length > 0) {
+      // Guardamos por 180 días (aprox un semestre). 'ex' es expiración en segundos.
+      await redis.set(cacheKey, JSON.stringify(eventos), { ex: 60 * 60 * 24 * 180 });
+    }
     return NextResponse.json({ eventos });
 
   } catch (error) {
