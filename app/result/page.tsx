@@ -506,7 +506,7 @@ export default function ResultPage() {
           {/* Mensaje de aviso TBD condicional */}
           {hayEventosTBD && (
             <p className="text-center text-[10px] text-amber-600 font-medium mb-1">
-              ⚠️ Al descargar se ignorarán los eventos sin fecha (TBD)
+              ⚠️ Al descargar se ignorarán los eventos sin fecha (TBD). <span className="font-bold underline cursor-pointer">¡EDÍTALAS!</span>
             </p>
           )}
 

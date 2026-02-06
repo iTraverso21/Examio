@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useScan } from "../context/ScanContext";
 
@@ -11,19 +11,24 @@ export default function ScanPage() {
   const [analizando, setAnalizando] = useState(false);
   const [progreso, setProgreso] = useState({ actual: 0, total: 0, archivo: "" });
   const [errorToast, setErrorToast] = useState<string | null>(null);
-  
-  // Estado para saber sobre qué ramo está el mouse (hover normal)
   const [ramoHover, setRamoHover] = useState<number | null>(null);
-  
-  // NUEVO: Estado para saber en qué ramo se está ARRASTRANDO un archivo
   const [dragActiveId, setDragActiveId] = useState<number | null>(null);
+
+  // Referencia para cancelar el proceso
+  const cancelarRef = useRef(false);
 
   const mostrarError = (mensaje: string) => {
     setErrorToast(mensaje);
     setTimeout(() => setErrorToast(null), 3000);
   };
 
-  // Efecto global para escuchar Ctrl+V
+  const cancelarAnalisis = () => {
+    cancelarRef.current = true;
+    setAnalizando(false);
+    mostrarError("Análisis cancelado");
+  };
+
+  // Efecto global para pegar archivos (Ctrl+V)
   useEffect(() => {
     const handleGlobalPaste = (e: ClipboardEvent) => {
       if (ramoHover === null) return;
@@ -60,7 +65,7 @@ export default function ScanPage() {
     return () => window.removeEventListener("paste", handleGlobalPaste);
   }, [ramoHover, setRamos]);
 
-  // --- FUNCIONES DE DRAG & DROP ---
+  // Manejadores de Drag & Drop
   const handleDrag = (e: React.DragEvent, id: number) => {
     e.preventDefault();
     e.stopPropagation();
@@ -80,8 +85,8 @@ export default function ScanPage() {
       agregarArchivos(id, e.dataTransfer.files);
     }
   };
-  // -------------------------------
 
+  // Funciones de gestión de ramos
   const agregarRamo = () => {
     if (ramos.length >= 5) return mostrarError("Máximo 5 ramos por sesión");
     setRamos([...ramos, { id: Date.now(), nombre: "", archivos: [] }]);
@@ -121,11 +126,23 @@ export default function ScanPage() {
     e.stopPropagation();
   };
 
+  // Función principal de Análisis
   const analizar = async () => {
+    // Validación: Todos deben tener nombre Y archivos
+    const ramosIncompletos = ramos.some(r => 
+      (r.nombre.trim() !== "" && r.archivos.length === 0) || 
+      (r.nombre.trim() === "" && r.archivos.length > 0)
+    );
+
+    if (ramosIncompletos) {
+      return mostrarError("Completa nombre y archivos de todos los ramos (o elimina los vacíos).");
+    }
+
     const ramosValidos = ramos.filter(r => r.nombre.trim() && r.archivos.length > 0);
 
-    if (ramosValidos.length === 0) return mostrarError("Agrega al menos un ramo con archivos");
+    if (ramosValidos.length === 0) return mostrarError("Agrega al menos un ramo completo");
     
+    cancelarRef.current = false;
     setAnalizando(true);
     setProgreso({ actual: 0, total: ramosValidos.length, archivo: "" });
 
@@ -134,6 +151,8 @@ export default function ScanPage() {
       const ramosFallidos: string[] = [];
 
       for (let i = 0; i < ramosValidos.length; i++) {
+        if (cancelarRef.current) return;
+
         const ramo = ramosValidos[i];
 
         setProgreso({
@@ -150,6 +169,9 @@ export default function ScanPage() {
         });
 
         const response = await fetch('/api/analizar', { method: 'POST', body: formData });
+        
+        if (cancelarRef.current) return;
+
         const data = await response.json();
 
         if (response.status === 429) {
@@ -170,15 +192,17 @@ export default function ScanPage() {
         }
       }
 
+      if (cancelarRef.current) return;
+
       if (resultados.length === 0) {
         sessionStorage.setItem("error_ok", "1");
-        router.push(
-          "/error?message=" + encodeURIComponent(
-            ramosFallidos.length > 0
-              ? "No se pudo analizar ningún ramo. Revisa que los archivos no estén vacíos o dañados."
-              : "No se encontraron eventos. Revisa que los archivos tengan un calendario de evaluaciones."
-          )
-        );
+        
+        // --- CAMBIO AQUÍ: Mensaje de error más descriptivo ---
+        const mensajeError = ramosFallidos.length > 0
+          ? "No se pudo analizar ningún archivo. Verifica que no estén dañados."
+          : "No encontramos fechas. Asegúrate de que el archivo tenga el CALENDARIO explícito, no solo la descripción del curso.";
+
+        router.push("/error?message=" + encodeURIComponent(mensajeError));
         return;
       }
 
@@ -192,19 +216,20 @@ export default function ScanPage() {
       router.push('/result');
 
     } catch (error) {
+      if (cancelarRef.current) return;
       console.error(error);
       sessionStorage.setItem("error_ok", "1");
       router.push('/error?message=' + encodeURIComponent('Error de conexión'));
     }
   };
 
+  // Pantalla de Carga
   if (analizando) {
     return (
       <main className="relative min-h-screen flex items-center justify-center p-4 bg-[#F8FAFC] overflow-hidden animate-slide-down">
-        {/* Iluminación de fondo */}
         <div className="absolute top-[-10%] left-1/2 -translate-x-1/2 w-[120%] h-[60%] bg-[radial-gradient(circle_at_center,rgba(203,213,225,0.25)_0%,rgba(241,245,249,0.1)_40%,transparent_70%)] pointer-events-none" />
         
-        <div className="max-w-md w-full text-center relative z-10">
+        <div className="max-w-md w-full text-center relative z-10 flex flex-col items-center">
           <div className="mb-8">
             <div className="w-20 h-20 border-[3px] border-slate-200 border-t-slate-700 rounded-full animate-spin mx-auto"></div>
           </div>
@@ -218,23 +243,26 @@ export default function ScanPage() {
             ></div>
           </div>
           
-          <div className="bg-white rounded-2xl px-4 py-3 shadow-sm border border-slate-100 inline-block">
+          <div className="bg-white rounded-2xl px-4 py-3 shadow-sm border border-slate-100 inline-block mb-8">
             <p className="text-xs text-slate-600 font-medium truncate max-w-xs">{progreso.archivo}</p>
           </div>
+
+          <button 
+            onClick={cancelarAnalisis}
+            className="text-slate-400 hover:text-slate-600 font-semibold text-sm px-4 py-2 rounded-xl border border-transparent hover:border-slate-200 hover:bg-white transition-all"
+          >
+            Cancelar
+          </button>
         </div>
       </main>
     );
   }
 
+  // Pantalla Principal
   return (
-    <main className="relative min-h-screen p-4 pb-28 bg-[#F8FAFC] overflow-hidden animate-slide-down">
-      {/* Iluminación de fondo */}
-      <div className="absolute top-[-10%] left-1/2 -translate-x-1/2 w-[120%] h-[60%] bg-[radial-gradient(circle_at_center,rgba(203,213,225,0.25)_0%,rgba(241,245,249,0.1)_40%,transparent_70%)] pointer-events-none" />
-      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-[300px] bg-[radial-gradient(circle_at_50%_0%,rgba(59,130,246,0.03)_0%,transparent_60%)] pointer-events-none" />
-      
-      {/* Toast de error */}
+    <>
       {errorToast && (
-        <div className="fixed top-6 left-1/2 transform -translate-x-1/2 z-50 animate-fade-in-down w-full max-w-sm px-4">
+        <div className="fixed top-6 left-1/2 transform -translate-x-1/2 z-[100] animate-fade-in-down w-full max-w-sm px-4">
           <div className="bg-red-500 text-white px-5 py-4 rounded-[20px] shadow-lg shadow-red-500/20 flex items-center gap-3 backdrop-blur-sm">
             <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -244,191 +272,192 @@ export default function ScanPage() {
         </div>
       )}
 
-      <div className="max-w-xl mx-auto pt-4 relative z-10">
+      <main className="relative min-h-screen p-4 pb-28 bg-[#F8FAFC] overflow-hidden animate-slide-down">
+        <div className="absolute top-[-10%] left-1/2 -translate-x-1/2 w-[120%] h-[60%] bg-[radial-gradient(circle_at_center,rgba(203,213,225,0.25)_0%,rgba(241,245,249,0.1)_40%,transparent_70%)] pointer-events-none" />
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-[300px] bg-[radial-gradient(circle_at_50%_0%,rgba(59,130,246,0.03)_0%,transparent_60%)] pointer-events-none" />
         
-        {/* Header */}
-        <div className="mb-6">
-          <button 
-            onClick={() => router.push('/')} 
-            className="text-slate-500 hover:text-slate-900 text-sm font-semibold mb-6 flex items-center gap-2 transition-all hover:-translate-x-1 duration-200"
-          >
-            <svg className="w-9 h-9" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15 19l-7-7 7-7" />
-            </svg>
-            Volver
-          </button>
-          <h1 className="text-4xl font-black text-slate-900 mb-2 tracking-tight">Sube tus Ramos</h1>
-          <p className="text-sm text-slate-500 font-medium">Máximo 5 ramos • 3 archivos por ramo</p>
-        </div>
+        <div className="max-w-xl mx-auto pt-4 relative z-10">
+          
+          <div className="mb-6">
+            <button 
+              onClick={() => router.push('/')} 
+              className="text-slate-500 hover:text-slate-900 text-sm font-semibold mb-6 flex items-center gap-2 transition-all hover:-translate-x-1 duration-200"
+            >
+              <svg className="w-9 h-9" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15 19l-7-7 7-7" />
+              </svg>
+              Volver
+            </button>
+            <h1 className="text-4xl font-black text-slate-900 mb-2 tracking-tight">Sube tus Ramos</h1>
+            <p className="text-sm text-slate-500 font-medium">Máximo 5 ramos • 3 archivos por ramo</p>
+          </div>
 
-        {/* Lista de ramos */}
-        <div className="space-y-4 mb-8">
-          {ramos.map((ramo, index) => {
-            // isHovered: para bordes azules al pasar el mouse
-            const isHovered = ramoHover === ramo.id;
-            // isDragActive: para resaltar fuerte cuando se arrastra un archivo encima
-            const isDragActive = dragActiveId === ramo.id;
+          <div className="space-y-4 mb-8">
+            {ramos.map((ramo, index) => {
+              const isHovered = ramoHover === ramo.id;
+              const isDragActive = dragActiveId === ramo.id;
 
-            return (
-              <div 
-                key={ramo.id}
-                onMouseEnter={() => setRamoHover(ramo.id)}
-                onMouseLeave={() => setRamoHover(null)}
-                onPaste={(e) => handlePasteLocal(ramo.id, e)}
-                tabIndex={0}
-                // Si se está arrastrando algo encima, el borde se pone azul fuerte y grueso
-                className={`bg-white rounded-[24px] p-5 shadow-sm border transition-all duration-200 group outline-none
-                  ${isDragActive
-                    ? 'border-blue-500 ring-4 ring-blue-500/20 shadow-lg scale-[1.01]' // Estilo Drag Activo
-                    : isHovered 
-                      ? 'border-blue-400 ring-2 ring-blue-500/10 shadow-md' // Estilo Hover
-                      : 'border-slate-100 hover:border-slate-200'           // Estilo Normal
-                  }
-                `}
-              >
-                {/* Header del ramo */}
-                <div className="flex items-center gap-4 mb-4">
-                  <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold text-sm transition-colors
-                    ${(isHovered || isDragActive) ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-700'}
-                  `}>
-                    {index + 1}
-                  </div>
-                  <input 
-                    type="text" 
-                    placeholder="Ej: Cálculo I" 
-                    value={ramo.nombre}
-                    onChange={(e) => actualizarNombre(ramo.id, e.target.value)}
-                    className="flex-1 text-lg font-bold text-slate-900 placeholder:text-slate-400 bg-transparent border-b-2 border-transparent focus:border-slate-700 outline-none pb-2 transition-colors"
-                  />
-                  {ramos.length > 1 && (
-                    <button 
-                      onClick={() => eliminarRamo(ramo.id)} 
-                      className="text-slate-400 hover:text-red-500 transition-colors p-1"
-                    >
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M6 18L18 6M6 6l12 12" />
-                      </svg>
-                    </button>
-                  )}
-                </div>
-
-                {/* Zona de carga con Drag & Drop */}
+              return (
                 <div 
-                  className={`bg-slate-50 border-2 border-dashed rounded-[20px] p-6 transition-all outline-none relative
-                    ${isDragActive 
-                      ? 'border-blue-500 bg-blue-50' // Color al arrastrar archivo encima
+                  key={ramo.id}
+                  onMouseEnter={() => setRamoHover(ramo.id)}
+                  onMouseLeave={() => setRamoHover(null)}
+                  onPaste={(e) => handlePasteLocal(ramo.id, e)}
+                  tabIndex={0}
+                  className={`bg-white rounded-[24px] p-5 shadow-sm border transition-all duration-200 group outline-none
+                    ${isDragActive
+                      ? 'border-blue-500 ring-4 ring-blue-500/20 shadow-lg scale-[1.01]' 
                       : isHovered 
-                        ? 'border-blue-300 bg-blue-50/30' // Color al pasar mouse (listo para pegar)
-                        : 'border-slate-200 group-hover:bg-slate-100/50 group-hover:border-slate-300'
+                        ? 'border-blue-400 ring-2 ring-blue-500/10 shadow-md' 
+                        : 'border-slate-100 hover:border-slate-200'
                     }
                   `}
-                  // EVENTOS DE DRAG & DROP
-                  onDragEnter={(e) => handleDrag(e, ramo.id)}
-                  onDragLeave={(e) => handleDrag(e, ramo.id)}
-                  onDragOver={(e) => handleDrag(e, ramo.id)}
-                  onDrop={(e) => handleDrop(e, ramo.id)}
                 >
-                  <input 
-                    type="file" 
-                    accept=".pdf,.doc,.docx,image/*" 
-                    multiple 
-                    onChange={(e) => agregarArchivos(ramo.id, e.target.files)} 
-                    className="hidden" 
-                    id={`file-${ramo.id}`} 
-                  />
-                  <label htmlFor={`file-${ramo.id}`} className="block text-center cursor-pointer w-full h-full relative z-10">
-                    
-                    {/* Icono */}
-                    <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center mx-auto mb-3 shadow-sm border border-slate-100 group-hover:scale-110 transition-transform duration-300">
-                      <svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
-                      </svg>
+                  <div className="flex items-center gap-4 mb-4">
+                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold text-sm transition-colors
+                      ${(isHovered || isDragActive) ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-700'}
+                    `}>
+                      {index + 1}
                     </div>
-                    
-                    {/* Texto */}
-                    <div className="flex flex-col items-center gap-1">
-                      {isDragActive ? (
-                        <span className="text-sm font-bold text-blue-600 animate-pulse">¡Suelta los archivos aquí!</span>
-                      ) : (
-                        <div className="text-sm font-bold text-slate-900 flex items-center gap-2 justify-center">
-                          <span className="md:hidden">Toca para subir</span>
-                          <span className="hidden md:inline">Click, Arrastra o Pega</span>
-                          <span className={`hidden md:flex items-center gap-1 bg-white border px-1.5 py-0.5 rounded text-[10px] font-medium shadow-sm select-none transition-colors
-                            ${isHovered ? 'border-blue-200 text-blue-600' : 'border-slate-200 text-slate-500'}
-                          `}>
-                            <kbd className="font-sans">Ctrl</kbd><span>+</span><kbd className="font-sans">V</kbd>
-                          </span>
-                        </div>
-                      )}
+                    <input 
+                      type="text" 
+                      placeholder="Ej: Cálculo I" 
+                      value={ramo.nombre}
+                      onChange={(e) => actualizarNombre(ramo.id, e.target.value)}
+                      className="flex-1 text-lg font-bold text-slate-900 placeholder:text-slate-400 bg-transparent border-b-2 border-transparent focus:border-slate-700 outline-none pb-2 transition-colors"
+                    />
+                    {ramos.length > 1 && (
+                      <button 
+                        onClick={() => eliminarRamo(ramo.id)} 
+                        className="text-slate-400 hover:text-red-500 transition-colors p-1"
+                      >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    )}
+                  </div>
+
+                  <div 
+                    className={`bg-slate-50 border-2 border-dashed rounded-[20px] p-6 transition-all outline-none relative flex flex-col justify-center
+                      ${isDragActive 
+                        ? 'border-blue-500 bg-blue-50' 
+                        : isHovered 
+                          ? 'border-blue-300 bg-blue-50/30' 
+                          : 'border-slate-200 group-hover:bg-slate-100/50 group-hover:border-slate-300'
+                      }
+                    `}
+                    onDragEnter={(e) => handleDrag(e, ramo.id)}
+                    onDragLeave={(e) => handleDrag(e, ramo.id)}
+                    onDragOver={(e) => handleDrag(e, ramo.id)}
+                    onDrop={(e) => handleDrop(e, ramo.id)}
+                  >
+                    <input 
+                      type="file" 
+                      accept=".pdf,.doc,.docx,image/*" 
+                      multiple 
+                      onChange={(e) => agregarArchivos(ramo.id, e.target.files)} 
+                      className="hidden" 
+                      id={`file-${ramo.id}`} 
+                    />
+                    <label htmlFor={`file-${ramo.id}`} className="block text-center cursor-pointer w-full h-full relative z-10">
                       
-                      {!isDragActive && (
-                        <p className="text-[11px] text-slate-500">PDF, Word o imágenes • Máx 3 archivos</p>
-                      )}
-                    </div>
+                      <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center mx-auto mb-3 shadow-sm border border-slate-100 group-hover:scale-110 transition-transform duration-300">
+                        <svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                        </svg>
+                      </div>
+                      
+                      <div className="flex flex-col items-center gap-1">
+                        {isDragActive ? (
+                          <span className="text-sm font-bold text-blue-600 animate-pulse">¡Suelta los archivos aquí!</span>
+                        ) : (
+                          <div className="text-sm font-bold text-slate-900 flex items-center gap-2 justify-center">
+                            <span className="md:hidden">Toca para subir</span>
+                            <span className="hidden md:inline">Click, Arrastra o Pega</span>
+                            <span className={`hidden md:flex items-center gap-1 bg-white border px-1.5 py-0.5 rounded text-[10px] font-medium shadow-sm select-none transition-colors
+                              ${isHovered ? 'border-blue-200 text-blue-600' : 'border-slate-200 text-slate-500'}
+                            `}>
+                              <kbd className="font-sans">Ctrl</kbd><span>+</span><kbd className="font-sans">V</kbd>
+                            </span>
+                          </div>
+                        )}
+                        
+                        {!isDragActive && (
+                          <div className="flex flex-col items-center gap-2 mt-1">
+                            <p className="text-[11px] text-slate-500">PDF, Word o imágenes • Máx 3 archivos</p>
+                            
+                            {/* --- CAMBIO AQUÍ: Etiqueta de advertencia visual --- */}
+                            <div className="bg-amber-50 border border-amber-200 rounded-lg px-2 py-1 shadow-sm">
+                              <p className="text-[10px] text-amber-700 font-bold flex items-center gap-1">
+                                <span>⚠️</span> El archivo debe tener fechas/calendario
+                              </p>
+                            </div>
+                          </div>
+                        )}
+                      </div>
 
-                  </label>
+                    </label>
 
-                  {/* Lista de archivos */}
-                  {ramo.archivos.length > 0 && (
-                    <div className="mt-4 space-y-2 border-t border-slate-200 pt-3 relative z-20">
-                      {ramo.archivos.map((archivo, i) => (
-                        <div 
-                          key={i} 
-                          className="flex items-center gap-3 bg-white rounded-xl p-2.5 shadow-sm border border-slate-100 group/file hover:border-slate-200 transition-all"
-                        >
-                          <div className="w-2 h-2 rounded-full bg-emerald-500 flex-shrink-0"></div>
-                          <span className="text-xs font-medium text-slate-700 flex-1 truncate text-left">{archivo.name}</span>
-                          <button 
-                            onClick={(e) => {
-                              e.preventDefault(); 
-                              eliminarArchivo(ramo.id, i);
-                            }} 
-                            className="text-slate-400 hover:text-red-500 p-1.5 rounded-full hover:bg-red-50 transition-colors"
-                            title="Eliminar archivo"
+                    {ramo.archivos.length > 0 && (
+                      <div className="mt-4 space-y-2 border-t border-slate-200 pt-3 relative z-20">
+                        {ramo.archivos.map((archivo, i) => (
+                          <div 
+                            key={i} 
+                            className="flex items-center gap-3 bg-white rounded-xl p-2.5 shadow-sm border border-slate-100 group/file hover:border-slate-200 transition-all"
                           >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-                            </svg>
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
+                            <div className="w-2 h-2 rounded-full bg-emerald-500 flex-shrink-0"></div>
+                            <span className="text-xs font-medium text-slate-700 flex-1 truncate text-left">{archivo.name}</span>
+                            <button 
+                              onClick={(e) => {
+                                e.preventDefault(); 
+                                eliminarArchivo(ramo.id, i);
+                              }} 
+                              className="text-slate-400 hover:text-red-500 p-1.5 rounded-full hover:bg-red-50 transition-colors"
+                              title="Eliminar archivo"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                              </svg>
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
 
-        {/* Botón agregar ramo */}
-        {ramos.length < 5 && (
-          <button 
-            onClick={agregarRamo} 
-            className="w-full py-4 border-2 border-dashed border-slate-300 rounded-[20px] text-slate-600 font-bold hover:bg-white hover:text-slate-900 hover:border-slate-400 transition-all mb-8 flex items-center justify-center gap-2 text-sm"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 4v16m8-8H4" />
-            </svg>
-            Agregar otro ramo
-          </button>
-        )}
-
-        {/* Botón analizar (fijo en mobile) */}
-        <div className="fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-lg border-t border-slate-200 p-4 md:relative md:bg-transparent md:border-0 md:p-0 md:backdrop-blur-none shadow-lg md:shadow-none">
-          <div className="max-w-xl mx-auto">
+          {ramos.length < 5 && (
             <button 
-              onClick={analizar} 
-              disabled={analizando} 
-              className="w-full bg-[#334155] hover:bg-[#1e293b] text-white text-lg font-bold py-4 rounded-[24px] shadow-lg shadow-slate-900/10 transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              onClick={agregarRamo} 
+              className="w-full py-4 border-2 border-dashed border-slate-300 rounded-[20px] text-slate-600 font-bold hover:bg-white hover:text-slate-900 hover:border-slate-400 transition-all mb-8 flex items-center justify-center gap-2 text-sm"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 4v16m8-8H4" />
               </svg>
-              Analizar Ramos
+              Agregar otro ramo
             </button>
+          )}
+
+          <div className="fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-lg border-t border-slate-200 p-4 md:relative md:bg-transparent md:border-0 md:p-0 md:backdrop-blur-none shadow-lg md:shadow-none">
+            <div className="max-w-xl mx-auto">
+              <button 
+                onClick={analizar} 
+                disabled={analizando} 
+                className="w-full bg-[#334155] hover:bg-[#1e293b] text-white text-lg font-bold py-4 rounded-[24px] shadow-lg shadow-slate-900/10 transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                </svg>
+                Analizar Ramos
+              </button>
+            </div>
           </div>
         </div>
-      </div>
-    </main>
+      </main>
+    </>
   );
 }
