@@ -2,6 +2,7 @@
 
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect } from "react";
+import AnimatedBackground from "../components/AnimatedBackground";
 
 function ErrorContent() {
   const router = useRouter();
@@ -36,8 +37,9 @@ function ErrorContent() {
 
   return (
     <main className="min-h-screen flex items-center justify-center p-4">
+      <AnimatedBackground opacity={1} />
       <div className="max-w-md w-full text-center">
-        
+
         <div className="text-6xl mb-6">
           {info.emoji}
         </div>
