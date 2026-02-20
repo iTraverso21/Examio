@@ -26,7 +26,7 @@ export async function POST(request: Request) {
 
     const nombreRamo = formData.get('nombreRamo') as string || "Ramo";
     const archivos: File[] = [];
-    
+
     let i = 0;
     while (formData.has(`file_${i}`)) {
       const file = formData.get(`file_${i}`) as File;
@@ -48,16 +48,33 @@ export async function POST(request: Request) {
 
     if (respuestaEnCache) {
       console.log("⚡ HIT CACHÉ: Respondiendo desde Redis (Gratis)");
-      // Si existe, devolvemos el JSON guardado directamente. Ahorro total.
-      return NextResponse.json({ eventos: respuestaEnCache });
+
+      const eventosCacheados = typeof respuestaEnCache === "string"
+        ? JSON.parse(respuestaEnCache)
+        : respuestaEnCache;
+
+      const eventosFinales = (Array.isArray(eventosCacheados) ? eventosCacheados : []).map((e: any) => ({
+        ...e,
+        // Limpiamos por si la caché antigua tenía guardado el nombre del ramo anterior
+        titulo: `[${nombreRamo}] ${e.titulo ? e.titulo.replace(/^\[.*?\]\s*/, '') : 'Evaluación'}`
+      }));
+
+      return NextResponse.json({ eventos: eventosFinales });
     }
     console.log("🤖 MISS CACHÉ: Llamando a Gemini...");
 
-    const eventos = await analizarRamoCompleto(model, archivos, nombreRamo);
-    if (eventos.length > 0) {
-      // Guardamos por 180 días (aprox un semestre). 'ex' es expiración en segundos.
-      await redis.set(cacheKey, JSON.stringify(eventos), { ex: 60 * 60 * 24 * 180 });
+    const eventosRaw = await analizarRamoCompleto(model, archivos, nombreRamo);
+    if (eventosRaw.length > 0) {
+      // Guardamos por 180 días la info limpia, SIN el nombre del ramo
+      await redis.set(cacheKey, JSON.stringify(eventosRaw), { ex: 60 * 60 * 24 * 180 });
     }
+
+    // Agregamos el nombre del ramo antes de enviar al usuario actual
+    const eventos = eventosRaw.map((e: any) => ({
+      ...e,
+      titulo: `[${nombreRamo}] ${e.titulo}`
+    }));
+
     return NextResponse.json({ eventos });
 
   } catch (error) {
@@ -127,20 +144,19 @@ async function analizarRamoCompleto(model: any, files: File[], nombreRamo: strin
       return [];
     }
 
-    const eventosCorregidos = eventos.map((evento: any) => {
+    const eventosLimpios = eventos.map((evento: any) => {
       let titulo = evento.titulo || "Evaluación";
-      
-      if (!titulo.startsWith(`[${nombreRamo}]`)) {
-        titulo = `[${nombreRamo}] ${titulo}`;
-      }
+
+      // Limpiamos cualquier prefijo de tipo [Ramo] por si el modelo lo agrega
+      titulo = titulo.replace(/^\[.*?\]\s*/, '');
 
       return {
         ...evento,
-        titulo: titulo 
+        titulo
       };
     });
 
-    return eventosCorregidos;
+    return eventosLimpios;
 
   } catch (error) {
     console.error(error);
