@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Image from "next/image";
 import { Smartphone, Monitor } from "lucide-react";
@@ -45,6 +45,18 @@ const DEVICE_HINT: Record<DeviceType, { icon: React.ReactNode; text: string; col
 };
 
 export default function ResultPage() {
+  return (
+    <Suspense fallback={
+      <main className="relative min-h-screen flex items-center justify-center p-4 bg-[#F8FAFC]">
+        <div className="w-20 h-20 border-[3px] border-slate-200 border-t-slate-700 rounded-full animate-spin"></div>
+      </main>
+    }>
+      <ResultContent />
+    </Suspense>
+  );
+}
+
+function ResultContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const rawDevice = searchParams.get("device");

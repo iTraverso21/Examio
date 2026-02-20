@@ -1,12 +1,24 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useScan } from "../context/ScanContext";
 import { Smartphone, Monitor, ChevronDown, Check } from "lucide-react";
 import AnimatedBackground from "../components/AnimatedBackground";
 
 export default function ScanPage() {
+  return (
+    <Suspense fallback={
+      <main className="relative min-h-screen flex items-center justify-center p-4 bg-[#F8FAFC]">
+        <div className="w-20 h-20 border-[3px] border-slate-200 border-t-slate-700 rounded-full animate-spin"></div>
+      </main>
+    }>
+      <ScanContent />
+    </Suspense>
+  );
+}
+
+function ScanContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const deviceParams = searchParams.get("device");
