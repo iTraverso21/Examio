@@ -22,7 +22,7 @@ export async function POST(request: Request) {
   try {
     const formData = await request.formData();
     // Usamos Flash-Lite (o el que tengas disponible)
-    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash-lite" });
 
     const nombreRamo = formData.get('nombreRamo') as string || "Ramo";
     const archivos: File[] = [];
