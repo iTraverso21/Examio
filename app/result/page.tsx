@@ -212,7 +212,7 @@ function ResultContent() {
   // ─── Pantalla post-descarga ──────────────────────────────────────────────────
   if (descargado) {
     return (
-      <main className="relative min-h-screen bg-[#F8FAFC] flex items-center justify-center p-4 overflow-hidden animate-slide-down">
+      <main className="relative min-h-screen bg-[#F8FAFC] flex items-center justify-center p-4 animate-slide-down">
         <AnimatedBackground opacity={0.25} />
 
         <div className="max-w-md w-full text-center relative z-10">
@@ -248,7 +248,7 @@ function ResultContent() {
 
   // ─── Pantalla principal de resultados ───────────────────────────────────────
   return (
-    <main className="relative min-h-screen bg-[#F8FAFC] p-4 pb-8 overflow-hidden animate-slide-down">
+    <main className="relative min-h-screen bg-[#F8FAFC] p-4 pb-8 animate-slide-down">
       <AnimatedBackground opacity={0.25} />
       <div className="max-w-2xl mx-auto pt-4 relative z-10">
 

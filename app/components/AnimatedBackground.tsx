@@ -3,7 +3,7 @@
 import { useEffect, useRef } from "react";
 
 // ── Config ────────────────────────────────────────────────────────────────────
-const NODE_COUNT = 48; // Más densidad para compensar el movimiento
+const NODE_COUNT = 48; // Más densidad para compensar el movimiento (PC)
 const MIN_LABEL_DELAY = 600;
 const MAX_LABEL_DELAY = 1200;
 const MAX_ACTIVE_LABELS = 5;
@@ -14,7 +14,7 @@ const SHRINK_FRAMES = 20;
 const Z_SPEED_MIN = 0.12, Z_SPEED_MAX = 0.38;
 const Z_SCALE_MIN = 0.45, Z_SCALE_MAX = 1.25;
 const Z_ALPHA_MIN = 0.12, Z_ALPHA_MAX = 0.55;
-const MAX_DIST = 140;
+const MAX_DIST = 140; // Distancia para conectar líneas (PC)
 const MAX_Z_DIFF = 0.35;
 
 // Scroll parallax (Viaje espacial)
@@ -56,7 +56,7 @@ function easeOutBack(t: number) { const c = 2.4; return 1 + c * Math.pow(t - 1, 
 function easeInBack(t: number) { const c = 2.4; return c * t * t * t - (c - 1) * t * t; }
 function lerp(a: number, b: number, t: number) { return a + (b - a) * t; }
 
-function createNode(w: number, h: number, i: number): Node {
+function createNode(w: number, h: number, i: number, isMobile: boolean): Node {
     const z = Math.random();
     const spd = lerp(Z_SPEED_MIN, Z_SPEED_MAX, z);
     const angle = Math.random() * Math.PI * 2;
@@ -69,7 +69,8 @@ function createNode(w: number, h: number, i: number): Node {
         accentTimer: 0, accentActive: false,
         labelState: LS.IDLE, labelProgress: 0,
         labelText: "", labelTimer: 0,
-        nextLabelIn: MIN_LABEL_DELAY + Math.floor(Math.random() * MAX_LABEL_DELAY) + i * 55,
+        // En celular espaciamos más las etiquetas para que no se sature la pantalla
+        nextLabelIn: MIN_LABEL_DELAY + Math.floor(Math.random() * MAX_LABEL_DELAY) + i * (isMobile ? 120 : 55),
     };
 }
 
@@ -85,7 +86,13 @@ export default function AnimatedBackground({ opacity = 1 }: { opacity?: number }
         let nodes: Node[] = [];
         let raf: number;
 
-        // Velocidad de scroll acumulada — se aplica por frame y se frena con fricción
+        // --- OPTIMIZACIÓN MÓVIL ---
+        const isMobile = window.innerWidth < 768;
+        const actualNodeCount = isMobile ? 16 : NODE_COUNT; // Bajamos de 48 a 16 en celular
+        const actualMaxDist = isMobile ? 90 : MAX_DIST; // Conectamos menos líneas
+        const actualMaxActiveLabels = isMobile ? 2 : MAX_ACTIVE_LABELS; // Máximo 2 etiquetas simultáneas
+
+        // Velocidad de scroll acumulada
         const scrollVel = { y: 0 };
         let lastScrollY = window.scrollY;
 
@@ -103,7 +110,12 @@ export default function AnimatedBackground({ opacity = 1 }: { opacity?: number }
             const scale = lerp(Z_SCALE_MIN, Z_SCALE_MAX, z);
             const W = CAL_W_BASE * scale, H = CAL_H_BASE * scale, hH = HEADER_H_BASE * scale, r = CAL_R * scale;
             ctx.save(); ctx.globalAlpha = alpha; ctx.translate(x, y);
-            ctx.shadowColor = "rgba(51,65,85,0.10)"; ctx.shadowBlur = 5 * scale; ctx.shadowOffsetY = 2 * scale;
+
+            // SOMBRAS APAGADAS EN CELULAR
+            if (!isMobile) {
+                ctx.shadowColor = "rgba(51,65,85,0.10)"; ctx.shadowBlur = 5 * scale; ctx.shadowOffsetY = 2 * scale;
+            }
+
             ctx.beginPath(); ctx.roundRect(-W / 2, -H / 2, W, H, r); ctx.fillStyle = `${CAL_BG}1)`; ctx.fill();
             ctx.shadowColor = "transparent";
             ctx.beginPath(); ctx.roundRect(-W / 2, -H / 2, W, hH, [r, r, 0, 0]); ctx.fillStyle = `${CAL_HEADER}1)`; ctx.fill();
@@ -133,7 +145,12 @@ export default function AnimatedBackground({ opacity = 1 }: { opacity?: number }
             const W = DOC_W_BASE * scale, H = DOC_H_BASE * scale, r = 2.5 * scale;
             const fold = W * 0.28;
             ctx.save(); ctx.globalAlpha = alpha; ctx.translate(x, y);
-            ctx.shadowColor = "rgba(51,65,85,0.10)"; ctx.shadowBlur = 5 * scale; ctx.shadowOffsetY = 2 * scale;
+
+            // SOMBRAS APAGADAS EN CELULAR
+            if (!isMobile) {
+                ctx.shadowColor = "rgba(51,65,85,0.10)"; ctx.shadowBlur = 5 * scale; ctx.shadowOffsetY = 2 * scale;
+            }
+
             ctx.beginPath();
             ctx.moveTo(-W / 2 + r, -H / 2); ctx.lineTo(W / 2 - fold, -H / 2); ctx.lineTo(W / 2, -H / 2 + fold);
             ctx.lineTo(W / 2, H / 2 - r); ctx.quadraticCurveTo(W / 2, H / 2, W / 2 - r, H / 2);
@@ -171,14 +188,10 @@ export default function AnimatedBackground({ opacity = 1 }: { opacity?: number }
         };
 
         const updateNode = (n: Node, w: number, h: number) => {
-            // Parallax invertido: Al bajar (scrollVel.y > 0), los objetos suben
             const parallaxFactor = lerp(SCROLL_PARALLAX_MIN, SCROLL_PARALLAX_MAX, n.z);
             n.y -= scrollVel.y * parallaxFactor;
-
-            // Movimiento propio constante
             n.x += n.vx; n.y += n.vy;
 
-            // Wrap con aleatorización (Simula "nuevas estrellas" en el viaje)
             const resetNode = (node: Node) => {
                 const z = Math.random();
                 node.z = z;
@@ -192,27 +205,12 @@ export default function AnimatedBackground({ opacity = 1 }: { opacity?: number }
                 node.nextLabelIn = randDelay();
             };
 
-            // Límites de envoltura un poco más amplios para suavidad
             const margin = 120;
-            if (n.y < -margin) {
-                n.y = h + margin;
-                n.x = Math.random() * w;
-                resetNode(n);
-            } else if (n.y > h + margin) {
-                n.y = -margin;
-                n.x = Math.random() * w;
-                resetNode(n);
-            }
+            if (n.y < -margin) { n.y = h + margin; n.x = Math.random() * w; resetNode(n); }
+            else if (n.y > h + margin) { n.y = -margin; n.x = Math.random() * w; resetNode(n); }
 
-            if (n.x < -margin) {
-                n.x = w + margin;
-                n.y = Math.random() * h;
-                resetNode(n);
-            } else if (n.x > w + margin) {
-                n.x = -margin;
-                n.y = Math.random() * h;
-                resetNode(n);
-            }
+            if (n.x < -margin) { n.x = w + margin; n.y = Math.random() * h; resetNode(n); }
+            else if (n.x > w + margin) { n.x = -margin; n.y = Math.random() * h; resetNode(n); }
 
             if (n.type === "cal") {
                 if (!n.accentActive && Math.random() < ACCENT_CHANCE) { n.accentActive = true; n.accentTimer = 0; }
@@ -221,7 +219,7 @@ export default function AnimatedBackground({ opacity = 1 }: { opacity?: number }
             switch (n.labelState) {
                 case LS.IDLE:
                     if (--n.nextLabelIn <= 0) {
-                        if (countActive() < MAX_ACTIVE_LABELS) { n.labelState = LS.EXPANDING; n.labelProgress = 0; n.labelText = LABELS[Math.floor(Math.random() * LABELS.length)]; }
+                        if (countActive() < actualMaxActiveLabels) { n.labelState = LS.EXPANDING; n.labelProgress = 0; n.labelText = LABELS[Math.floor(Math.random() * LABELS.length)]; }
                         else n.nextLabelIn = 90;
                     } break;
                 case LS.EXPANDING:
@@ -258,17 +256,17 @@ export default function AnimatedBackground({ opacity = 1 }: { opacity?: number }
                     if (Math.abs(nodes[i].z - nodes[j].z) > MAX_Z_DIFF) continue;
                     const dx = nodes[i].x - nodes[j].x, dy = nodes[i].y - nodes[j].y;
                     const d = Math.sqrt(dx * dx + dy * dy);
-                    if (d < MAX_DIST) {
+                    // Usamos el MAX_DIST reducido para celular
+                    if (d < actualMaxDist) {
                         const avgZ = (nodes[i].z + nodes[j].z) * 0.5;
                         ctx.beginPath(); ctx.moveTo(nodes[i].x, nodes[i].y); ctx.lineTo(nodes[j].x, nodes[j].y);
-                        ctx.strokeStyle = `${LINE_COLOR}${(1 - d / MAX_DIST) * lerp(0.06, 0.22, avgZ)})`;
+                        ctx.strokeStyle = `${LINE_COLOR}${(1 - d / actualMaxDist) * lerp(0.06, 0.22, avgZ)})`;
                         ctx.lineWidth = lerp(0.4, 0.9, avgZ); ctx.stroke();
                     }
                 }
             }
             for (const n of nodes) { updateNode(n, w, h); renderNode(n); }
 
-            // Frenar scroll cada frame
             scrollVel.y *= SCROLL_FRICTION;
             if (Math.abs(scrollVel.y) < 0.01) scrollVel.y = 0;
 
@@ -276,7 +274,8 @@ export default function AnimatedBackground({ opacity = 1 }: { opacity?: number }
         };
 
         resize();
-        nodes = Array.from({ length: NODE_COUNT }, (_, i) => createNode(canvas.width, canvas.height, i));
+        // Usamos el actualNodeCount (16 en cel, 48 en PC)
+        nodes = Array.from({ length: actualNodeCount }, (_, i) => createNode(canvas.width, canvas.height, i, isMobile));
         loop();
         window.addEventListener("resize", resize);
         window.addEventListener("scroll", handleScroll, { passive: true });
@@ -288,10 +287,15 @@ export default function AnimatedBackground({ opacity = 1 }: { opacity?: number }
     }, []);
 
     return (
-        <canvas
-            ref={canvasRef}
-            className="fixed inset-0 pointer-events-none z-0"
-            style={{ opacity }}
-        />
+        <div className="absolute inset-0 pointer-events-none z-0">
+            <div className="sticky top-0 w-full h-[100dvh]">
+                <canvas
+                    ref={canvasRef}
+                    className="w-full h-full block"
+                    style={{ opacity }}
+                />
+            </div>
+        </div>
     );
+
 }
