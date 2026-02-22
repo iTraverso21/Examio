@@ -317,7 +317,7 @@ function ScanContent() {
         </div>
       )}
 
-      <main className="relative min-h-screen p-4 pb-28 bg-[#F8FAFC] overflow-hidden animate-slide-down">
+      <main className="relative min-h-screen p-4 pb-28 bg-[#F8FAFC] animate-slide-down">
         <AnimatedBackground opacity={0.25} />
 
         <div className="max-w-xl mx-auto pt-4 relative z-10">
@@ -434,7 +434,7 @@ function ScanContent() {
                   >
                     <input
                       type="file"
-                      accept=".pdf,.doc,.docx,image/*"
+                      accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,image/*"
                       multiple
                       onChange={(e) => agregarArchivos(ramo.id, e.target.files)}
                       className="hidden"

@@ -75,8 +75,7 @@ export default function Home() {
           className="fixed inset-0 z-50 flex items-end md:items-center justify-center p-4 bg-black/30 backdrop-blur-sm"
           onClick={(e) => { if (e.target === e.currentTarget) setShowModal(false); }}
         >
-          <div className="w-full max-w-md bg-white rounded-3xl shadow-2xl shadow-slate-900/20 border border-slate-100 overflow-hidden animate-in slide-in-from-bottom-4 duration-300">
-
+          <div className="bg-white rounded-[24px] p-6 w-full max-w-md max-h-[90dvh] overflow-y-auto m-auto">
             {/* Modal Header */}
             <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-slate-100">
               <div>
