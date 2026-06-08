@@ -40,9 +40,10 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# python & database
+# python, database & data
 __pycache__/
 *.pyc
 *.sqlite3
 *.db
+*.csv
 
