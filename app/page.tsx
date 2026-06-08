@@ -11,7 +11,8 @@ import {
   Smartphone,
   Monitor,
   Zap,
-  X
+  X,
+  Calendar
 } from "lucide-react";
 import { useState } from "react";
 import AnimatedBackground from "./components/AnimatedBackground";
@@ -174,15 +175,31 @@ export default function Home() {
             Tus ramos al calendario en segundos.<br />Simple, rápido y completamente gratis.
           </p>
 
-          <div className="p-2 bg-white rounded-[2rem] shadow-xl shadow-slate-200/60 border border-slate-100">
-            <button
-              onClick={() => setShowModal(true)}
-              className="flex items-center gap-4 bg-[#334155] hover:bg-[#1e293b] text-white px-10 py-5 md:px-12 md:py-6 rounded-3xl text-xl font-bold transition-all active:scale-[0.98] group shadow-lg shadow-slate-900/20"
-            >
-              <Upload className="w-6 h-6" />
-              <span>Escanear Ramos</span>
-              <ArrowRight className="w-6 h-6 group-hover:translate-x-1 transition-transform opacity-50" />
-            </button>
+          <div className="flex flex-col gap-4 items-center w-full">
+            <div className="p-2 bg-white rounded-[2.5rem] shadow-xl shadow-slate-200/60 border border-slate-100 w-full md:w-auto">
+              <button
+                onClick={() => setShowModal(true)}
+                className="flex items-center justify-center gap-4 bg-[#334155] hover:bg-[#1e293b] text-white px-8 py-5 md:px-12 md:py-6 rounded-[2rem] text-lg md:text-xl font-bold transition-all active:scale-[0.98] group shadow-lg shadow-slate-900/20 w-full md:w-auto"
+              >
+                <Upload className="w-6 h-6" />
+                <span>Escanear Ramos</span>
+                <ArrowRight className="w-6 h-6 group-hover:translate-x-1 transition-transform opacity-50 hidden md:block" />
+              </button>
+            </div>
+
+            <div className="relative mt-2 w-full md:w-auto">
+              <div className="absolute -top-3 -right-2 z-10 bg-red-500 text-white text-[10px] md:text-xs font-black uppercase px-3 py-1 rounded-full shadow-lg shadow-red-500/40 transform rotate-12 border-2 border-[#f6f7f7] animate-pulse">
+                ¡NUEVO!
+              </div>
+              <button
+                onClick={() => router.push("/scheduler")}
+                className="flex items-center justify-center gap-3 bg-[#334155]/5 hover:bg-[#334155]/10 text-[#334155] px-8 py-4 rounded-full text-base md:text-lg font-bold transition-all active:scale-[0.98] group border border-[#334155]/20 shadow-md shadow-[#334155]/10 w-full"
+              >
+                <Calendar className="w-6 h-6 text-[#334155]" />
+                <span>Armar Horarios</span>
+                <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform text-[#334155]/70" />
+              </button>
+            </div>
           </div>
           <p className="mt-6 text-slate-400 text-xs font-bold tracking-wide uppercase">Soporta PDF, Word y Capturas</p>
         </div>
