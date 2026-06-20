@@ -15,7 +15,10 @@ const lexend = Lexend({
 
 export default function ArmadorPage() {
   const [siglaInput, setSiglaInput] = useState("");
-  const [siglas, setSiglas] = useState<{sigla: string, nombre: string}[]>([]);
+  const [siglas, setSiglas] = useState<{sigla: string, nombre: string, profesor?: string}[]>([]);
+  const [editingProf, setEditingProf] = useState<string | null>(null);
+  const [professorsForCourse, setProfessorsForCourse] = useState<string[]>([]);
+  const [loadingProfs, setLoadingProfs] = useState(false);
 
   const [allowOverlap, setAllowOverlap] = useState<Record<string, boolean>>({
     AYU: false,
@@ -109,6 +112,26 @@ export default function ArmadorPage() {
 
   const handleRemoveSigla = (siglaToRemove: string) => {
     setSiglas(siglas.filter(sig => sig.sigla !== siglaToRemove));
+    if (editingProf === siglaToRemove) setEditingProf(null);
+  };
+
+  const handleOpenProfSelect = async (sigla: string) => {
+    setEditingProf(sigla);
+    setLoadingProfs(true);
+    try {
+      const res = await fetch(`/api/professors?sigla=${sigla}`);
+      const data = await res.json();
+      setProfessorsForCourse(data.results || []);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoadingProfs(false);
+    }
+  };
+
+  const handleSelectProf = (sigla: string, prof: string) => {
+    setSiglas(siglas.map(s => s.sigla === sigla ? { ...s, profesor: prof === "Cualquiera" ? undefined : prof } : s));
+    setEditingProf(null);
   };
 
   const toggleOverlap = (type: string) => {
@@ -124,7 +147,7 @@ export default function ArmadorPage() {
       const res = await fetch("/api/combinations", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ siglas: siglas.map(s => s.sigla), allowOverlap })
+        body: JSON.stringify({ courses: siglas, allowOverlap })
       });
       const data = await res.json();
 
@@ -169,7 +192,7 @@ export default function ArmadorPage() {
       <div className="max-w-[1400px] mx-auto p-4 md:p-6 lg:p-8 flex flex-col lg:flex-row gap-8 items-start">
 
         {/* PANEL IZQUIERDO: CONTROLES */}
-        <div className="w-full lg:w-[350px] flex-shrink-0 flex flex-col gap-6 sticky top-[88px]">
+        <div className="w-full lg:w-[350px] flex-shrink-0 flex flex-col gap-6 lg:sticky lg:top-[88px]">
 
           {/* Tarjeta de Búsqueda */}
           <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm">
@@ -234,6 +257,38 @@ export default function ArmadorPage() {
                   </div>
                   {course.nombre && (
                     <span className="text-xs text-slate-500 truncate mt-0.5 pr-6">{course.nombre}</span>
+                  )}
+                  {editingProf === course.sigla ? (
+                    loadingProfs ? (
+                      <span className="text-xs text-slate-400 mt-2 flex items-center gap-1"><Loader2 className="w-3 h-3 animate-spin"/> Cargando profesores...</span>
+                    ) : (
+                      <div className="mt-2 flex items-center gap-2">
+                        <select 
+                          className="text-xs border border-slate-300 rounded p-1.5 w-full bg-white focus:outline-none focus:ring-1 focus:ring-[#334155] cursor-pointer"
+                          value={course.profesor || "Cualquiera"}
+                          onChange={(e) => handleSelectProf(course.sigla, e.target.value)}
+                          onBlur={() => setEditingProf(null)}
+                          autoFocus
+                        >
+                          <option value="Cualquiera">Profesor: Cualquiera</option>
+                          {professorsForCourse.map(p => (
+                            <option key={p} value={p}>{p}</option>
+                          ))}
+                        </select>
+                      </div>
+                    )
+                  ) : (
+                    <div className="mt-2 flex items-center justify-between pt-2 border-t border-slate-200/60">
+                      <span className="text-[11px] text-slate-500 truncate mr-2">
+                        Profesor: <span className="font-medium text-[#334155]">{course.profesor || "Cualquiera"}</span>
+                      </span>
+                      <button 
+                        onClick={() => handleOpenProfSelect(course.sigla)} 
+                        className="text-[10px] font-bold text-slate-600 bg-white hover:bg-slate-50 border border-slate-200 hover:border-slate-300 px-2.5 py-1 rounded-md transition-all shadow-sm shrink-0 active:scale-95"
+                      >
+                        Cambiar
+                      </button>
+                    </div>
                   )}
                 </div>
               ))}

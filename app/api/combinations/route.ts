@@ -5,13 +5,13 @@ import { generateCombinations, CombinatorConfig, Section } from '../../../lib/se
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { siglas, allowOverlap } = body;
+    const { courses, allowOverlap } = body;
 
-    if (!siglas || !Array.isArray(siglas) || siglas.length === 0) {
-      return NextResponse.json({ error: 'Debes proporcionar un arreglo de siglas' }, { status: 400 });
+    if (!courses || !Array.isArray(courses) || courses.length === 0) {
+      return NextResponse.json({ error: 'Debes proporcionar un arreglo de cursos' }, { status: 400 });
     }
 
-    const siglasLimpias = siglas.map(s => s.toUpperCase().trim());
+    const siglasLimpias = courses.map((c: { sigla: string }) => c.sigla.toUpperCase().trim());
 
     const { data: sections, error } = await supabase
       .from('CursosUC')
@@ -29,6 +29,19 @@ export async function POST(request: Request) {
       }, { status: 404 });
     }
 
+    // Filtrar por profesor si se especificó
+    const filteredSections = sections.filter((sec: any) => {
+      const courseReq = courses.find((c: any) => c.sigla === sec.sigla);
+      if (!courseReq || !courseReq.profesor) return true;
+      return sec.profesor && sec.profesor.trim() === courseReq.profesor;
+    });
+
+    if (filteredSections.length === 0) {
+      return NextResponse.json({
+        error: `No se encontraron secciones válidas para esos profesores.`
+      }, { status: 404 });
+    }
+
     const config: CombinatorConfig = {
       allowOverlap: allowOverlap || {
         "AYU": false,
@@ -37,7 +50,7 @@ export async function POST(request: Request) {
       }
     };
 
-    const combinations = generateCombinations(sections as Section[], config);
+    const combinations = generateCombinations(filteredSections as Section[], config);
 
     return NextResponse.json({
       totalCombinations: combinations.length,
