@@ -228,7 +228,7 @@ export default function Home() {
         </section>
 
         {/* FOOTER */}
-        <footer className="w-full py-8 mt-auto border-t border-slate-200 bg-white/50 backdrop-blur-sm text-center">
+        <footer className="w-full py-8 mt-auto border-t border-slate-200 bg-white/50 backdrop-blur-sm text-center flex flex-col items-center gap-5">
           <div className="flex items-center justify-center gap-3 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">
             <span>Gratis</span>
             <span className="text-slate-300">•</span>
@@ -239,6 +239,9 @@ export default function Home() {
               <Zap className="w-3 h-3 fill-slate-400" />
             </span>
           </div>
+          <a href="/legal" className="text-xs text-slate-400 hover:text-slate-600 font-medium transition-colors underline decoration-slate-300 underline-offset-4">
+            Términos de Servicio y Privacidad
+          </a>
         </footer>
 
       </div>
